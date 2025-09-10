@@ -655,9 +655,11 @@ QProgressBar#diskUsageBar::chunk {
 
             self.statusBar().showMessage(f"Imported {len(objects)} object(s) from {path}", 5000)
     def _update_parent_checkstate(self, child: QtWidgets.QTreeWidgetItem) -> None:
-        """Update all ancestor check states based on children (manual tri-state).
+        """Aggiorna tutti gli antenati in base ai figli (tri-stato manuale).
+        Update all ancestor check states based on children (manual tri-state).
 
-        This does **not** propagate any visibility; it only reflects partial/checked/unchecked on parents.
+        Non propaga la visibilità; riflette solo partial/checked/unchecked sui genitori.
+        This does not propagate any visibility; it only reflects partial/checked/unchecked on parents.
         """
         if child is None:
             return
@@ -685,46 +687,46 @@ QProgressBar#diskUsageBar::chunk {
                 parent = parent.parent()
         finally:
             self._tree_updating = False
-    
-    def _on_tree_item_changed(self, item: QtWidgets.QTreeWidgetItem, col: int) -> None:
-        # Avoid re-entrancy when we are programmatically setting states
-        if getattr(self, "_tree_updating", False):
-            return
 
+    def _apply_item_visibility(self, item: QtWidgets.QTreeWidgetItem, state: QtCore.Qt.CheckState) -> None:
+        """Applica la visibilità a un elemento e ai suoi discendenti.
+        Apply visibility to an item and its descendants.
+        """
         data = item.data(0, QtCore.Qt.UserRole)
-
-        # Case 1: leaf with metadata → toggle corresponding actor(s)
         if isinstance(data, dict):
             kind = data.get("kind")
             ds = data.get("ds")
-            if ds is None:
-                return
-            visible = (item.checkState(0) == QtCore.Qt.Checked)
-            if kind == "points":
-                getattr(self.viewer3d, "set_points_visibility", lambda *_: None)(ds, visible)
-            elif kind == "normals":
-                getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, visible)
-            # After a child changed, reflect state on parents
-            self._update_parent_checkstate(item)
+            if ds is not None:
+                visible = (state == QtCore.Qt.Checked)
+                if kind == "points":
+                    getattr(self.viewer3d, "set_points_visibility", lambda *_: None)(ds, visible)
+                elif kind == "normals":
+                    getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, visible)
+        for i in range(item.childCount()):
+            child = item.child(i)
+            child.setCheckState(0, state)
+            self._apply_item_visibility(child, state)
+
+    def _on_tree_item_changed(self, item: QtWidgets.QTreeWidgetItem, col: int) -> None:
+        # Evitare la rientranza quando stiamo impostando programmaticamente gli stati.
+        # Avoid re-entrancy when we are programmatically setting states.
+        if getattr(self, "_tree_updating", False):
             return
 
-        # Case 2: parent/group node (no metadata)
-        child_count = item.childCount()
-        if child_count > 0:
-            state = item.checkState(0)
-            # Only propagate if fully checked/unchecked; if partial, do nothing
-            if state == QtCore.Qt.PartiallyChecked:
-                return
-            # Propagate the user's explicit parent toggle to all children
-            self._tree_updating = True
-            try:
-                for i in range(child_count):
-                    child = item.child(i)
-                    child.setCheckState(0, state)
-            finally:
-                self._tree_updating = False
-            # Reflect the change upwards too
+        state = item.checkState(0)
+        # Ignorare gli aggiornamenti parziali.
+        # Ignore partial updates.
+        if state == QtCore.Qt.PartiallyChecked:
+            return
+
+        self._tree_updating = True
+        try:
+            self._apply_item_visibility(item, state)
+            # Dopo che un elemento cambia, riflettere lo stato sui genitori.
+            # After an item changes, reflect state on parents.
             self._update_parent_checkstate(item)
+        finally:
+            self._tree_updating = False
 
     def _on_tree_context_menu(self, pos: QtCore.QPoint) -> None:
         item = self.treeMCTS.itemAt(pos)
@@ -733,7 +735,8 @@ QProgressBar#diskUsageBar::chunk {
         data = item.data(0, QtCore.Qt.UserRole)
         if not isinstance(data, dict):
             return
-        # Only allow color edit for point cloud nodes
+        # Consentire la modifica del colore solo per i nodi della nuvola di punti.
+        # Only allow color edit for point cloud nodes.
         if data.get("kind") != "points":
             return
         ds = data.get("ds")
@@ -755,6 +758,7 @@ QProgressBar#diskUsageBar::chunk {
             getattr(self.viewer3d, "set_dataset_color", lambda *_: None)(ds, r, g, b)
 
     # ------------------------------------------------------------------
+    # Test / Esecutore di script
     # Testing / Script runner
     # ------------------------------------------------------------------
     def _on_run_script(self) -> None:
