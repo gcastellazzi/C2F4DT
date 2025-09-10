@@ -601,35 +601,50 @@ QProgressBar#diskUsageBar::chunk {
                 pass
 
             #
-            # Tree: hierarchical, checkable, with metadata
+            # Tree: gerarchico, selezionabile, con metadati.
+            # Tree: hierarchical, checkable, with metadata.
             self.treeMCTS.blockSignals(True)
             root = QtWidgets.QTreeWidgetItem([obj.name])
-            root.setFlags(root.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+            root.setFlags(
+                root.flags()
+                | QtCore.Qt.ItemFlag.ItemIsUserCheckable
+                | QtCore.Qt.ItemFlag.ItemIsTristate
+            )
             root.setCheckState(0, QtCore.Qt.Checked)
             self.treeMCTS.addTopLevelItem(root)
 
             if obj.kind == "points":
+                # Figlio nuvola di punti
                 # Point cloud child
                 it_points = QtWidgets.QTreeWidgetItem(["Point cloud"])
-                it_points.setFlags(it_points.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+                it_points.setFlags(
+                    it_points.flags()
+                    | QtCore.Qt.ItemFlag.ItemIsUserCheckable
+                    | QtCore.Qt.ItemFlag.ItemIsTristate
+                )
                 it_points.setCheckState(0, QtCore.Qt.Checked)
                 it_points.setData(0, QtCore.Qt.UserRole, {"kind": "points", "ds": ds_index})
                 root.addChild(it_points)
 
+                # Figlio Normali (se presente)
                 # Normals child (if available)
                 if getattr(obj, "normals", None) is not None:
                     it_normals = QtWidgets.QTreeWidgetItem(["Normals"])
-                    it_normals.setFlags(it_normals.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+                    it_normals.setFlags(
+                        it_normals.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable
+                    )
                     it_normals.setCheckState(0, QtCore.Qt.Unchecked)
                     it_normals.setData(0, QtCore.Qt.UserRole, {"kind": "normals", "ds": ds_index})
-                    root.addChild(it_normals)
+                    it_points.addChild(it_normals)
             else:
+                # Segnaposto Mesh (overlay futuri)
                 # Mesh placeholder child (future overlays)
                 it_mesh = QtWidgets.QTreeWidgetItem(["Mesh"])
                 it_mesh.setFlags(it_mesh.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
                 it_mesh.setCheckState(0, QtCore.Qt.Checked)
                 root.addChild(it_mesh)
 
+            # Sblocca i segnali dopo la creazione del sottoalbero
             # Unblock signals after building the subtree
             self.treeMCTS.blockSignals(False)
 
@@ -654,13 +669,12 @@ QProgressBar#diskUsageBar::chunk {
                 pass
 
             self.statusBar().showMessage(f"Imported {len(objects)} object(s) from {path}", 5000)
+            # Ricalcola la visibilità iniziale dopo l'importazione.
+            # Recompute initial visibility after import.
+            self._refresh_tree_visibility()
     def _update_parent_checkstate(self, child: QtWidgets.QTreeWidgetItem) -> None:
-        """Aggiorna tutti gli antenati in base ai figli (tri-stato manuale).
-        Update all ancestor check states based on children (manual tri-state).
-
-        Non propaga la visibilità; riflette solo partial/checked/unchecked sui genitori.
-        This does not propagate any visibility; it only reflects partial/checked/unchecked on parents.
-        """
+        """Aggiorna gli antenati in base ai figli (tri-stato manuale).
+        Update ancestors according to children (manual tri-state)."""
         if child is None:
             return
         self._tree_updating = True
@@ -688,45 +702,60 @@ QProgressBar#diskUsageBar::chunk {
         finally:
             self._tree_updating = False
 
-    def _apply_item_visibility(self, item: QtWidgets.QTreeWidgetItem, state: QtCore.Qt.CheckState) -> None:
-        """Applica la visibilità a un elemento e ai suoi discendenti.
-        Apply visibility to an item and its descendants.
-        """
-        data = item.data(0, QtCore.Qt.UserRole)
-        if isinstance(data, dict):
-            kind = data.get("kind")
-            ds = data.get("ds")
-            if ds is not None:
-                visible = (state == QtCore.Qt.Checked)
-                if kind == "points":
-                    getattr(self.viewer3d, "set_points_visibility", lambda *_: None)(ds, visible)
-                elif kind == "normals":
-                    getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, visible)
+    def _set_descendant_checkstate(
+        self, item: QtWidgets.QTreeWidgetItem, state: QtCore.Qt.CheckState
+    ) -> None:
+        """Imposta lo stato di tutti i discendenti.
+        Set the check state of all descendants."""
         for i in range(item.childCount()):
             child = item.child(i)
             child.setCheckState(0, state)
-            self._apply_item_visibility(child, state)
+            self._set_descendant_checkstate(child, state)
+
+    def _is_effectively_checked(self, item: QtWidgets.QTreeWidgetItem) -> bool:
+        """Verifica se l'elemento e i suoi antenati sono selezionati.
+        Return True if the item and all its ancestors are checked."""
+        while item is not None:
+            if item.checkState(0) != QtCore.Qt.Checked:
+                return False
+            item = item.parent()
+        return True
+
+    def _refresh_tree_visibility(self) -> None:
+        """Ricalcola la visibilità delle geometrie in base all'albero.
+        Recompute geometry visibility based on the tree."""
+
+        def recurse(node: QtWidgets.QTreeWidgetItem) -> None:
+            data = node.data(0, QtCore.Qt.UserRole)
+            if isinstance(data, dict):
+                kind = data.get("kind")
+                ds = data.get("ds")
+                if ds is not None:
+                    visible = self._is_effectively_checked(node)
+                    if kind == "points":
+                        getattr(self.viewer3d, "set_points_visibility", lambda *_: None)(ds, visible)
+                    elif kind == "normals":
+                        getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, visible)
+            for i in range(node.childCount()):
+                recurse(node.child(i))
+
+        for i in range(self.treeMCTS.topLevelItemCount()):
+            recurse(self.treeMCTS.topLevelItem(i))
 
     def _on_tree_item_changed(self, item: QtWidgets.QTreeWidgetItem, col: int) -> None:
-        # Evitare la rientranza quando stiamo impostando programmaticamente gli stati.
-        # Avoid re-entrancy when we are programmatically setting states.
+        # Evita la rientranza durante gli aggiornamenti programmati.
+        # Avoid re-entrancy during programmatic updates.
         if getattr(self, "_tree_updating", False):
             return
 
         state = item.checkState(0)
-        # Ignorare gli aggiornamenti parziali.
-        # Ignore partial updates.
-        if state == QtCore.Qt.PartiallyChecked:
-            return
-
         self._tree_updating = True
         try:
-            self._apply_item_visibility(item, state)
-            # Dopo che un elemento cambia, riflettere lo stato sui genitori.
-            # After an item changes, reflect state on parents.
+            self._set_descendant_checkstate(item, state)
             self._update_parent_checkstate(item)
         finally:
             self._tree_updating = False
+        self._refresh_tree_visibility()
 
     def _on_tree_context_menu(self, pos: QtCore.QPoint) -> None:
         item = self.treeMCTS.itemAt(pos)
@@ -987,26 +1016,37 @@ QProgressBar#diskUsageBar::chunk {
             except Exception:
                 pass
 
-            # Build the tree entries (same structure as interactive import)
+            # Costruisci le voci dell'albero (come nell'import interattivo)
+            # Build the tree entries (same as interactive import)
             self.treeMCTS.blockSignals(True)
             root = QtWidgets.QTreeWidgetItem([obj.name])
-            root.setFlags(root.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+            root.setFlags(
+                root.flags()
+                | QtCore.Qt.ItemFlag.ItemIsUserCheckable
+                | QtCore.Qt.ItemFlag.ItemIsTristate
+            )
             root.setCheckState(0, QtCore.Qt.Checked)
             self.treeMCTS.addTopLevelItem(root)
 
             if obj.kind == "points":
                 it_points = QtWidgets.QTreeWidgetItem(["Point cloud"])
-                it_points.setFlags(it_points.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+                it_points.setFlags(
+                    it_points.flags()
+                    | QtCore.Qt.ItemFlag.ItemIsUserCheckable
+                    | QtCore.Qt.ItemFlag.ItemIsTristate
+                )
                 it_points.setCheckState(0, QtCore.Qt.Checked)
                 it_points.setData(0, QtCore.Qt.UserRole, {"kind": "points", "ds": ds_index})
                 root.addChild(it_points)
 
                 if getattr(obj, "normals", None) is not None:
                     it_normals = QtWidgets.QTreeWidgetItem(["Normals"])
-                    it_normals.setFlags(it_normals.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+                    it_normals.setFlags(
+                        it_normals.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable
+                    )
                     it_normals.setCheckState(0, QtCore.Qt.Unchecked)
                     it_normals.setData(0, QtCore.Qt.UserRole, {"kind": "normals", "ds": ds_index})
-                    root.addChild(it_normals)
+                    it_points.addChild(it_normals)
             else:
                 it_mesh = QtWidgets.QTreeWidgetItem(["Mesh"])
                 it_mesh.setFlags(it_mesh.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
@@ -1014,6 +1054,9 @@ QProgressBar#diskUsageBar::chunk {
                 root.addChild(it_mesh)
 
             self.treeMCTS.blockSignals(False)
+            # Aggiorna la visibilità dopo l'aggiunta.
+            # Update visibility after adding.
+            self._refresh_tree_visibility()
 
             # Register into MCTS and set current MCT so it's visible in console
             try:
