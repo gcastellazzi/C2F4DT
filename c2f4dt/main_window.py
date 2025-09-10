@@ -325,12 +325,15 @@ QProgressBar#diskUsageBar::chunk {
 
         self.setCentralWidget(central)
 
-        # Wire DisplayPanel to viewer
-        self.displayPanel.sigPointSizeChanged.connect(self.viewer3d.set_point_size)
-        self.displayPanel.sigPointBudgetChanged.connect(self.viewer3d.set_point_budget)
-        self.displayPanel.sigColorModeChanged.connect(self.viewer3d.set_color_mode)
-        self.displayPanel.sigSolidColorChanged.connect(lambda c: self.viewer3d.set_solid_color(c.red(), c.green(), c.blue()))
-        self.displayPanel.sigColormapChanged.connect(self.viewer3d.set_colormap)
+        # Collega il DisplayPanel agli handler specifici.
+        # Wire the DisplayPanel to specific handlers.
+        self.displayPanel.sigPointSizeChanged.connect(self._on_point_size_changed)
+        self.displayPanel.sigPointBudgetChanged.connect(self._on_point_budget_changed)
+        self.displayPanel.sigColorModeChanged.connect(self._on_color_mode_changed)
+        self.displayPanel.sigSolidColorChanged.connect(self._on_solid_color_changed)
+        self.displayPanel.sigColormapChanged.connect(self._on_colormap_changed)
+        self.displayPanel.sigMeshRepresentationChanged.connect(self._on_mesh_rep_changed)
+        self.displayPanel.sigMeshOpacityChanged.connect(self._on_mesh_opacity_changed)
 
     def _on_console_executed(self, cmd: str) -> None:
         """Append executed console command to the MESSAGES panel."""
@@ -340,18 +343,120 @@ QProgressBar#diskUsageBar::chunk {
             pass
 
     def _on_tree_selection_changed(self) -> None:
-        """Keep `mct` synced with the selected dataset (if any)."""
+        """Mantieni `mct` in sync con l'elemento selezionato.
+        Keep `mct` synced with the selected dataset."""
         item = self.treeMCTS.currentItem()
         if item is None:
             return
-        # Walk up to the root item (dataset node)
+        # Salta alla radice (nodo del file) e ottieni l'entry.
+        # Walk up to root (file node) and fetch entry.
         root = item
         while root.parent() is not None:
             root = root.parent()
         name = root.text(0)
         entry = self.mcts.get(name)
-        if entry:
-            self.mct = entry
+        if not entry:
+            return
+        self.mct = entry
+        info = self._dataset_info_from_item(item)
+        if info:
+            self.displayPanel.set_mode(info.get("kind", "points"))
+            self.displayPanel.apply_properties(entry)
+
+    def _dataset_info_from_item(self, item: QtWidgets.QTreeWidgetItem | None):
+        """Recupera info dataset dall'item o dai suoi vicini.
+        Retrieve dataset info from the item or neighbors."""
+        if item is None:
+            return None
+        data = item.data(0, QtCore.Qt.UserRole)
+        if isinstance(data, dict) and data.get("ds") is not None:
+            return data
+        for i in range(item.childCount()):
+            found = self._dataset_info_from_item(item.child(i))
+            if found:
+                return found
+        parent = item.parent()
+        if parent is not None:
+            return self._dataset_info_from_item(parent)
+        return None
+
+    def _current_dataset_index(self) -> Optional[int]:
+        """Return dataset index of the currently selected tree item."""
+        item = self.treeMCTS.currentItem()
+        info = self._dataset_info_from_item(item)
+        if info:
+            return info.get("ds")
+        return None
+
+    def _on_point_size_changed(self, size: int) -> None:
+        """Aggiorna la dimensione dei punti per il dataset selezionato.
+        Update point size for the selected dataset."""
+        ds = self._current_dataset_index()
+        if ds is None:
+            return
+        self.viewer3d.set_point_size(int(size), ds)
+        if self.mct:
+            self.mct["point_size"] = int(size)
+
+    def _on_point_budget_changed(self, percent: int) -> None:
+        """Aggiorna la percentuale di punti visibili.
+        Update visible points percentage."""
+        ds = self._current_dataset_index()
+        if ds is None:
+            return
+        self.viewer3d.set_point_budget(int(percent), ds)
+        if self.mct:
+            self.mct["point_budget"] = int(percent)
+
+    def _on_color_mode_changed(self, mode: str) -> None:
+        """Cambia la modalità colore del dataset selezionato.
+        Change color mode of the selected dataset."""
+        ds = self._current_dataset_index()
+        if ds is None:
+            return
+        self.viewer3d.set_color_mode(mode, ds)
+        if self.mct:
+            self.mct["color_mode"] = mode
+
+    def _on_solid_color_changed(self, col: QtGui.QColor) -> None:
+        """Imposta il colore solido del dataset selezionato.
+        Set solid color for the selected dataset."""
+        ds = self._current_dataset_index()
+        if ds is None or not col.isValid():
+            return
+        self.viewer3d.set_dataset_color(ds, col.red(), col.green(), col.blue())
+        if self.mct:
+            self.mct["solid_color"] = (col.red(), col.green(), col.blue())
+
+    def _on_colormap_changed(self, name: str) -> None:
+        """Aggiorna la mappa colori del dataset selezionato.
+        Update colormap for the selected dataset."""
+        ds = self._current_dataset_index()
+        if ds is None:
+            return
+        self.viewer3d.set_colormap(name, ds)
+        if self.mct:
+            self.mct["colormap"] = name
+
+    def _on_mesh_rep_changed(self, mode: str) -> None:
+        """Cambia la rappresentazione del mesh selezionato.
+        Change representation for the selected mesh."""
+        ds = self._current_dataset_index()
+        if ds is None:
+            return
+        self.viewer3d.set_mesh_representation(ds, mode)
+        if self.mct:
+            self.mct["representation"] = mode
+
+    def _on_mesh_opacity_changed(self, val: int) -> None:
+        """Aggiorna l'opacità del mesh selezionato.
+        Update opacity for the selected mesh."""
+        ds = self._current_dataset_index()
+        if ds is None:
+            return
+        self.viewer3d.set_mesh_opacity(ds, int(val))
+        if self.mct:
+            self.mct["opacity"] = int(val)
 
     def _build_statusbar(self) -> None:
         sb = QtWidgets.QStatusBar(self)
@@ -589,9 +694,11 @@ QProgressBar#diskUsageBar::chunk {
                 prev_mode = None
 
             if obj.kind == "points" and obj.points is not None:
-                ds_index = self.viewer3d.add_points(obj.points, obj.colors, getattr(obj, "normals", None))
+                ds_index = self.viewer3d.add_points(
+                    obj.points, obj.colors, getattr(obj, "normals", None)
+                )
             elif obj.kind == "mesh" and obj.pv_mesh is not None:
-                self.viewer3d.add_pyvista_mesh(obj.pv_mesh)
+                ds_index = self.viewer3d.add_pyvista_mesh(obj.pv_mesh)
 
             # Restore previous color mode
             try:
@@ -637,11 +744,12 @@ QProgressBar#diskUsageBar::chunk {
                     it_normals.setData(0, QtCore.Qt.UserRole, {"kind": "normals", "ds": ds_index})
                     it_points.addChild(it_normals)
             else:
-                # Segnaposto Mesh (overlay futuri)
-                # Mesh placeholder child (future overlays)
+                # Nodo Mesh
+                # Mesh node
                 it_mesh = QtWidgets.QTreeWidgetItem(["Mesh"])
                 it_mesh.setFlags(it_mesh.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
                 it_mesh.setCheckState(0, QtCore.Qt.Checked)
+                it_mesh.setData(0, QtCore.Qt.UserRole, {"kind": "mesh", "ds": ds_index})
                 root.addChild(it_mesh)
 
             # Sblocca i segnali dopo la creazione del sottoalbero
@@ -656,8 +764,33 @@ QProgressBar#diskUsageBar::chunk {
                     "has_rgb": obj.colors is not None,
                     "has_intensity": getattr(obj, 'intensity', None) is not None,
                     "has_normals": getattr(obj, 'normals', None) is not None,
-                    "ds_index": ds_index if (obj.kind == 'points' and 'ds_index' in locals()) else None,
+                    "ds_index": ds_index,
                 }
+                if obj.kind == "points":
+                    entry.update(
+                        {
+                            "point_size": getattr(self.viewer3d, "_point_size", 3),
+                            "point_budget": getattr(
+                                self.viewer3d, "_view_budget_percent", 100
+                            ),
+                            "color_mode": getattr(self.viewer3d, "_color_mode", "Normal RGB"),
+                            "colormap": getattr(self.viewer3d, "_cmap", "viridis"),
+                            "solid_color": self.viewer3d._datasets[ds_index].get(
+                                "solid_color", (1.0, 1.0, 1.0)
+                            ),
+                            "points_as_spheres": getattr(
+                                self.viewer3d, "_points_as_spheres", False
+                            ),
+                        }
+                    )
+                else:
+                    entry.update(
+                        {
+                            "representation": "Surface",
+                            "opacity": 100,
+                            "solid_color": (1.0, 1.0, 1.0),
+                        }
+                    )
                 self.mcts[obj.name] = entry
                 self.mct = entry
                 # Select the newly added root item for clarity
@@ -736,6 +869,8 @@ QProgressBar#diskUsageBar::chunk {
                         getattr(self.viewer3d, "set_points_visibility", lambda *_: None)(ds, visible)
                     elif kind == "normals":
                         getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, visible)
+                    elif kind == "mesh":
+                        getattr(self.viewer3d, "set_mesh_visibility", lambda *_: None)(ds, visible)
             for i in range(node.childCount()):
                 recurse(node.child(i))
 
