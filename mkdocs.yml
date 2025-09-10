@@ -1,40 +1,104 @@
-site_name: C2F4DT Docs
+site_name: Cloud2FEMi
 repo_url: https://github.com/gcastellazzi/C2F4DT
-
 theme:
   name: material
+  logo: assets/logo-cloud2fem.png
+  favicon: assets/logo-cloud2fem.png
   features:
-    - navigation.tabs
-    - content.code.copy
-    - content.code.annotate
-    - palette.toggle
-  palette:
-    - scheme: default
-      primary: blue
-      toggle:
-        icon: material/brightness-6
-        name: Switch to dark mode
-    - scheme: slate
-      primary: blue
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
-
-plugins:
-  - search
-  - mkdocstrings
-
-nav:
-  - Home: index.md
-  - Specifications: specifications.md
-  # The API section below is maintained by scripts/auto_api.py
-  # It will be appended/overwritten on each run
-
+  - navigation.instant
+  - navigation.tabs
+  - navigation.sections
+  - content.code.copy
+  - content.action.edit
+  - toc.integrate
 markdown_extensions:
-  - toc:
-      permalink: true
-  - pymdownx.highlight
-  - pymdownx.superfences
-  - admonition
-  - tables
-  - attr_list
+- admonition
+- tables
+- toc
+- pymdownx.highlight:
+    anchor_linenums: true
+    linenums: true
+- pymdownx.superfences
+- pymdownx.details
+- pymdownx.tasklist
+- toc:
+    permalink: true
+plugins:
+- search
+nav:
+- Home: index.md
+- Guide:
+  - Overview: guide/overview.md
+  - Installation: guide/installation.md
+  - Architecture: guide/architecture.md
+  - Code Tree: guide/code_tree.md
+  - Flowchart: guide/flowchart.md
+  - Gui Layout: guide/gui_layout.md
+  - Theory: guide/theory.md
+  - Plugins Developer Guide: guide/plugins_developer_guide.md
+- API Reference:
+  - cloud2fem.app: api/cloud2fem.app.md
+  - index: api/index.md
+  - Api:
+    - cloud2fem.plugins.api: api/cloud2fem.plugins.api.md
+  - Console_Widget:
+    - cloud2fem.ui.console_widget: api/cloud2fem.ui.console_widget.md
+  - Contours:
+    - cloud2fem.ops.contours: api/cloud2fem.ops.contours.md
+  - Contours_Pipeline:
+    - cloud2fem.ops.contours_pipeline: api/cloud2fem.ops.contours_pipeline.md
+  - Contours_Utility:
+    - cloud2fem.ops.contours_utility: api/cloud2fem.ops.contours_utility.md
+  - Dialogs:
+    - cloud2fem.ui.dialogs.grid_dialog: api/cloud2fem.ui.dialogs.grid_dialog.md
+  - Geometry:
+    - cloud2fem.ops.geometry: api/cloud2fem.ops.geometry.md
+  - Grid_Model:
+    - cloud2fem.grid.grid_model: api/cloud2fem.grid.grid_model.md
+  - Legacy:
+    - cloud2fem.ops.legacy.slices_ex: api/cloud2fem.ops.legacy.slices_ex.md
+  - Logging:
+    - cloud2fem.utils.logging: api/cloud2fem.utils.logging.md
+  - Main_Window:
+    - cloud2fem.ui.main_window: api/cloud2fem.ui.main_window.md
+  - Manager:
+    - cloud2fem.plugins.manager: api/cloud2fem.plugins.manager.md
+  - Mct_Model:
+    - cloud2fem.model.mct_model: api/cloud2fem.model.mct_model.md
+  - Metrics:
+    - cloud2fem.utils.metrics: api/cloud2fem.utils.metrics.md
+  - Normalcalc:
+    - cloud2fem.native.normalcalc.rand_generation: api/cloud2fem.native.normalcalc.rand_generation.md
+  - Normals:
+    - cloud2fem.ops.normals: api/cloud2fem.ops.normals.md
+    - cloud2fem.tools.normals.runner: api/cloud2fem.tools.normals.runner.md
+  - Overlays:
+    - cloud2fem.viz.overlays: api/cloud2fem.viz.overlays.md
+  - Pcl:
+    - cloud2fem.io.pcl: api/cloud2fem.io.pcl.md
+  - Programmatic_Ui_Demo:
+    - cloud2fem.ui.programmatic_ui_demo: api/cloud2fem.ui.programmatic_ui_demo.md
+  - Qt_Paths:
+    - cloud2fem.ui.qt_paths: api/cloud2fem.ui.qt_paths.md
+  - Replay_Logger:
+    - cloud2fem.utils.replay_logger: api/cloud2fem.utils.replay_logger.md
+  - Resources:
+    - cloud2fem.ui.resources.resources_rc: api/cloud2fem.ui.resources.resources_rc.md
+  - Slice_Options:
+    - cloud2fem.ops.slice_options: api/cloud2fem.ops.slice_options.md
+  - Slices:
+    - cloud2fem.ops.slices: api/cloud2fem.ops.slices.md
+  - Slices_Options_Dialog:
+    - cloud2fem.ui.slices_options_dialog: api/cloud2fem.ui.slices_options_dialog.md
+  - Traceflow:
+    - cloud2fem.utils.traceflow: api/cloud2fem.utils.traceflow.md
+  - Types:
+    - cloud2fem.model.types: api/cloud2fem.model.types.md
+  - Utils:
+    - cloud2fem.ui.utils.helpers: api/cloud2fem.ui.utils.helpers.md
+  - Viewers:
+    - cloud2fem.ui.viewers.pyvista_backend: api/cloud2fem.ui.viewers.pyvista_backend.md
+    - cloud2fem.ui.viewers.viewer: api/cloud2fem.ui.viewers.viewer.md
+  - Widgets:
+    - cloud2fem.ui.widgets.embed: api/cloud2fem.ui.widgets.embed.md
+    - cloud2fem.ui.widgets.slices2d_window: api/cloud2fem.ui.widgets.slices2d_window.md

@@ -436,6 +436,83 @@ class Viewer3D(QtWidgets.QWidget):
         except Exception:
             pass
 
+    def set_dataset_color(self, dataset_index: int, r: int, g: int, b: int) -> None:
+        """Set per-dataset solid color and update its actor if needed.
+
+        Works for both point clouds and meshes. For points, if the dataset's
+        current color mode is Solid, the actor color is updated directly;
+        otherwise the actor is rebuilt only when needed.
+        """
+        try:
+            rec = self._datasets[dataset_index]
+        except Exception:
+            return
+
+        # Clamp and normalize to 0..1
+        rgb = (
+            max(0, min(255, int(r))) / 255.0,
+            max(0, min(255, int(g))) / 255.0,
+            max(0, min(255, int(b))) / 255.0,
+        )
+        rec["solid_color"] = rgb
+
+        # Mesh datasets: update actor property if present
+        if rec.get("kind") == "mesh":
+            actor_m = rec.get("actor_mesh")
+            if actor_m is not None:
+                try:
+                    actor_m.GetProperty().SetColor(rgb)
+                    self.plotter.update()
+                except Exception:
+                    pass
+            return
+
+        # Point datasets
+        if rec.get("kind") != "points":
+            return
+
+        mode = str(rec.get("color_mode", self._color_mode))
+        actor = rec.get("actor_points")
+
+        # If currently in Solid mode and an actor exists, update in-place
+        if actor is not None and mode == "Solid":
+            try:
+                actor.GetProperty().SetColor(rgb)
+                self.plotter.update()
+                return
+            except Exception:
+                pass
+
+        # Otherwise, rebuild only if visible (to reflect future switch to Solid)
+        if actor is not None:
+            try:
+                self.plotter.remove_actor(actor)
+            except Exception:
+                pass
+            rec["actor_points"] = None
+
+        if rec.get("visible", True):
+            new_actor = self._add_points_by_mode(
+                rec.get("pdata"),
+                rec.get("has_rgb", False),
+                rec.get("solid_color", self._solid_fallback),
+                rec.get("color_mode", self._color_mode),
+                rec.get("cmap", self._cmap),
+                rec.get("points_as_spheres", self._points_as_spheres),
+            )
+            if new_actor is not None:
+                try:
+                    prop = new_actor.GetProperty()
+                    if prop:
+                        prop.SetPointSize(rec.get("point_size", self._point_size))
+                except Exception:
+                    pass
+            rec["actor_points"] = new_actor
+            try:
+                self.plotter.update()
+            except Exception:
+                pass
+
     def set_points_as_spheres(self, enabled: bool) -> None:
         """Toggle rendering style for points and refresh existing actors."""
         self._points_as_spheres = bool(enabled)

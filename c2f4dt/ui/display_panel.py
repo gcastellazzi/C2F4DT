@@ -73,7 +73,19 @@ class DisplayPanel(QtWidgets.QWidget):
         # Solid color
         self.btnColor = QtWidgets.QPushButton("Choose…")
         self.btnColor.clicked.connect(self._pick_color)
-        self.rowSolid = self.btnColor
+
+        # Color preview square
+        self.colorPreview = QtWidgets.QLabel()
+        self.colorPreview.setFixedSize(20, 20)
+        self.colorPreview.setAutoFillBackground(True)
+        self._update_color_preview(QtGui.QColor(255, 255, 255))  # Default to white
+
+        # Layout for button and color preview
+        colorRow = QtWidgets.QHBoxLayout()
+        colorRow.addWidget(self.btnColor)
+        colorRow.addWidget(self.colorPreview)
+
+        self.rowSolid = _wrap(colorRow)
         form.addRow("Solid color", self.rowSolid)
 
         # Colormap
@@ -119,6 +131,7 @@ class DisplayPanel(QtWidgets.QWidget):
         solid = self.cmbColorMode.currentText() == "Solid"
         cmap = self.cmbColorMode.currentText() == "Normal Colormap"
         self.btnColor.setEnabled(solid and self._kind == "points")
+        self.colorPreview.setEnabled(solid and self._kind == "points")
         self.cmbCmap.setEnabled(cmap and self._kind == "points")
         self._set_row_visible(self.rowSolid, solid and self._kind == "points")
         self._set_row_visible(self.rowCmap, cmap and self._kind == "points")
@@ -132,11 +145,27 @@ class DisplayPanel(QtWidgets.QWidget):
         """Open color dialog and emit chosen color."""
         col = QtWidgets.QColorDialog.getColor(parent=self)
         if col.isValid():
-            pal = self.btnColor.palette()
-            pal.setColor(QtGui.QPalette.Button, col)
-            self.btnColor.setPalette(pal)
-            self.btnColor.setAutoFillBackground(True)
+            self._update_color_preview(col)
             self.sigSolidColorChanged.emit(col)
+
+    def _update_color_preview(self, col: QtGui.QColor) -> None:
+        """Update the small color square beside the button.
+
+        The square mirrors the currently selected solid color and follows
+        the visibility/enabled state of the Solid controls. If ``col`` is not
+        valid, fall back to a neutral gray.
+        """
+        if not isinstance(col, QtGui.QColor) or not col.isValid():
+            col = QtGui.QColor(200, 200, 200)
+        # Apply a simple stylesheet so it also works across themes
+        try:
+            hexcol = col.name(QtGui.QColor.HexRgb)
+        except Exception:
+            hexcol = col.name()
+        self.colorPreview.setStyleSheet(
+            f"QLabel {{ border:1px solid #666; border-radius:2px; background-color:{hexcol}; }}"
+        )
+        self.colorPreview.setToolTip(f"Solid color: {hexcol}")
 
     def _set_row_visible(self, widget: QtWidgets.QWidget, visible: bool) -> None:
         """Utility to show/hide a form row."""
@@ -166,9 +195,10 @@ class DisplayPanel(QtWidgets.QWidget):
                 if r <= 1 and g <= 1 and b <= 1:
                     r, g, b = int(r * 255), int(g * 255), int(b * 255)
                 c = QtGui.QColor(int(r), int(g), int(b))
+                self._update_color_preview(c)
                 pal = self.btnColor.palette()
-                pal.setColor(QtGui.QPalette.Button, c)
-                self.btnColor.setPalette(pal)
+                # pal.setColor(QtGui.QPalette.Button, c)
+                # self.btnColor.setPalette(pal)
                 self.btnColor.setAutoFillBackground(True)
         else:
             self.cmbMeshRep.setCurrentText(props.get("representation", "Surface").capitalize())

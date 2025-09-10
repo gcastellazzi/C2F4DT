@@ -1,0 +1,102 @@
+# Code Tree
+
+This page shows a depth-limited, clickable tree of the `cloud2fem` package.
+Links point to the corresponding API pages generated at build time.
+
+**Root:** `cloud2fem/` (depth ≤ 5)
+
+- **core/**
+    - `__init__.py`
+- **executables/**
+- **extensions/**
+    - **example_hello/**
+        - `__init__.py`
+         - [example_hello.py](../api/cloud2fem.extensions.example_hello.example_hello.md)
+    - **fem/**
+        - `__init__.py`
+         - [fem_extension.py](../api/cloud2fem.extensions.fem.fem_extension.md)
+    - **slices_vis/**
+        - `__init__.py`
+         - [slices_vis_extension.py](../api/cloud2fem.extensions.slices_vis.slices_vis_extension.md)
+- **grid/**
+    - `__init__.py`
+     - [grid_model.py](../api/cloud2fem.grid.grid_model.md)
+- **io/**
+    - `__init__.py`
+     - [pcl.py](../api/cloud2fem.io.pcl.md)
+- **model/**
+    - `__init__.py`
+     - [mct_model.py](../api/cloud2fem.model.mct_model.md)
+     - [types.py](../api/cloud2fem.model.types.md)
+- **native/**
+    - **normalcalc/**
+        - **build/**
+            - **CMakeFiles/**
+                - **3.25.0/**
+                    - **CompilerIdCXX/**
+                - **CMakeScratch/**
+                - **normalcalc.dir/**
+                - **pkgRedirects/**
+        - `__init__.py`
+         - [rand_generation.py](../api/cloud2fem.native.normalcalc.rand_generation.md)
+    - `__init__.py`
+- **ops/**
+    - **legacy/**
+        - `slices_ex.py`
+    - `__init__.py`
+     - [contours.py](../api/cloud2fem.ops.contours.md)
+     - [contours_pipeline.py](../api/cloud2fem.ops.contours_pipeline.md)
+     - [contours_utility.py](../api/cloud2fem.ops.contours_utility.md)
+     - [geometry.py](../api/cloud2fem.ops.geometry.md)
+     - [normals.py](../api/cloud2fem.ops.normals.md)
+     - [slice_options.py](../api/cloud2fem.ops.slice_options.md)
+     - [slices.py](../api/cloud2fem.ops.slices.md)
+- **plugins/**
+    - `__init__.py`
+     - [api.py](../api/cloud2fem.plugins.api.md)
+     - [manager.py](../api/cloud2fem.plugins.manager.md)
+- **processing/**
+    - `__init__.py`
+- **tools/**
+    - **normals/**
+        - `__init__.py`
+         - [runner.py](../api/cloud2fem.tools.normals.runner.md)
+    - `__init__.py`
+- **ui/**
+    - **dialogs/**
+        - `__init__.py`
+         - [grid_dialog.py](../api/cloud2fem.ui.dialogs.grid_dialog.md)
+    - **resources/**
+        - **icons/**
+        - `__init__.py`
+         - [resources_rc.py](../api/cloud2fem.ui.resources.resources_rc.md)
+    - **utils/**
+        - `helpers.py`
+    - **viewers/**
+        - `__init__.py`
+         - [pyvista_backend.py](../api/cloud2fem.ui.viewers.pyvista_backend.md)
+         - [viewer.py](../api/cloud2fem.ui.viewers.viewer.md)
+    - **widgets/**
+        - `__init__.py`
+         - [embed.py](../api/cloud2fem.ui.widgets.embed.md)
+        - `slices2d_window.py`
+    - `__init__.py`
+     - [console_widget.py](../api/cloud2fem.ui.console_widget.md)
+     - [main_window.py](../api/cloud2fem.ui.main_window.md)
+     - [main_window_OLD.py](../api/cloud2fem.ui.main_window_OLD.md)
+     - [programmatic_ui_demo.py](../api/cloud2fem.ui.programmatic_ui_demo.md)
+     - [qt_paths.py](../api/cloud2fem.ui.qt_paths.md)
+     - [slices_options_dialog.py](../api/cloud2fem.ui.slices_options_dialog.md)
+- **utils/**
+    - `__init__.py`
+     - [logging.py](../api/cloud2fem.utils.logging.md)
+     - [metrics.py](../api/cloud2fem.utils.metrics.md)
+     - [replay_logger.py](../api/cloud2fem.utils.replay_logger.md)
+     - [traceflow.py](../api/cloud2fem.utils.traceflow.md)
+- **viz/**
+    - **backends/**
+    - `__init__.py`
+     - [overlays.py](../api/cloud2fem.viz.overlays.md)
+- `__init__.py`
+- `__main__.py`
+ - [app.py](../api/cloud2fem.app.md)
