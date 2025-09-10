@@ -1,0 +1,19 @@
+[project]
+name = "c2f4dt"
+version = "1.0.0"
+description = "Cloud2FEM for Digital Twins – GUI and plugin framework"
+authors = [{name="Giovanni Castellazzi"}]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+addopts = "-q"

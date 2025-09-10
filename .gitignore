@@ -1,0 +1,32 @@
+# --- C2F4DT / Python ---
+# Local virtual environments
+.venv_c2f4dt/
+.venv_c2f4dt/
+
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Editors / OS noise
+.DS_Store
+.idea/
+.vscode/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local Python version managers
+.python-version

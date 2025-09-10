@@ -1,0 +1,30 @@
+site_name: C2F4DT Docs
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - content.code.copy
+    - content.code.annotate
+    - palette.toggle
+  palette:
+    - scheme: default
+      primary: blue
+      toggle:
+        icon: material/brightness-6
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+nav:
+  - Home: index.md
+  - Specifications: specifications.md
+  - API Reference: api.md
+markdown_extensions:
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - admonition
+  - tables
