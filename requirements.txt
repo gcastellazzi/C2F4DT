@@ -8,3 +8,6 @@ mkdocs>=1.6
 mkdocs-material>=9.5
 black>=24.3
 isort>=5.13
+mkdocstrings>=0.25
+mkdocstrings-python>=1.10
+PyYAML>=6.0

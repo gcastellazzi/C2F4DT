@@ -263,6 +263,12 @@ QProgressBar#diskUsageBar::chunk {
         self.treeMCTS.customContextMenuRequested.connect(self._on_tree_context_menu)
         self.treeMCTS.itemSelectionChanged.connect(self._on_tree_selection_changed)
         split.addWidget(self.treeMCTS)
+        # React to check/uncheck from the MCTS tree
+        try:
+            self.treeMCTS.itemChanged.disconnect(self._on_tree_item_changed)
+        except Exception:
+            pass
+        self.treeMCTS.itemChanged.connect(self._on_tree_item_changed)
         
 
         self.scrollDISPLAY = QtWidgets.QScrollArea(); self.scrollDISPLAY.setWidgetResizable(True)

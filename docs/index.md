@@ -1,3 +1,8 @@
-# C2F4DT – Release 1.0
+# C2F4DT — cloud2FEM for Digital Twins
 
-Initial documentation. See **Specifications** for the GUI and architecture details.
+Welcome to **C2F4DT**.
+
+- Start from the **User Guide** (coming soon)
+- Explore the **API** from the navigation sidebar
+
+> This documentation is built with MkDocs + mkdocstrings.

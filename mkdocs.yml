@@ -1,4 +1,6 @@
 site_name: C2F4DT Docs
+repo_url: https://github.com/gcastellazzi/C2F4DT
+
 theme:
   name: material
   features:
@@ -17,10 +19,17 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings
+
 nav:
   - Home: index.md
   - Specifications: specifications.md
-  - API Reference: api.md
+  # The API section below is maintained by scripts/auto_api.py
+  # It will be appended/overwritten on each run
+
 markdown_extensions:
   - toc:
       permalink: true
@@ -28,3 +37,4 @@ markdown_extensions:
   - pymdownx.superfences
   - admonition
   - tables
+  - attr_list
