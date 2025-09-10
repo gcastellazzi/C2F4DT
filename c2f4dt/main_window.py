@@ -608,7 +608,7 @@ QProgressBar#diskUsageBar::chunk {
             root.setFlags(
                 root.flags()
                 | QtCore.Qt.ItemFlag.ItemIsUserCheckable
-                | QtCore.Qt.ItemFlag.ItemIsTristate
+                | QtCore.Qt.ItemFlag.ItemIsAutoTristate
             )
             root.setCheckState(0, QtCore.Qt.Checked)
             self.treeMCTS.addTopLevelItem(root)
@@ -620,7 +620,7 @@ QProgressBar#diskUsageBar::chunk {
                 it_points.setFlags(
                     it_points.flags()
                     | QtCore.Qt.ItemFlag.ItemIsUserCheckable
-                    | QtCore.Qt.ItemFlag.ItemIsTristate
+                    | QtCore.Qt.ItemFlag.ItemIsAutoTristate
                 )
                 it_points.setCheckState(0, QtCore.Qt.Checked)
                 it_points.setData(0, QtCore.Qt.UserRole, {"kind": "points", "ds": ds_index})
@@ -1023,7 +1023,7 @@ QProgressBar#diskUsageBar::chunk {
             root.setFlags(
                 root.flags()
                 | QtCore.Qt.ItemFlag.ItemIsUserCheckable
-                | QtCore.Qt.ItemFlag.ItemIsTristate
+                | QtCore.Qt.ItemFlag.ItemIsAutoTristate
             )
             root.setCheckState(0, QtCore.Qt.Checked)
             self.treeMCTS.addTopLevelItem(root)
@@ -1033,7 +1033,7 @@ QProgressBar#diskUsageBar::chunk {
                 it_points.setFlags(
                     it_points.flags()
                     | QtCore.Qt.ItemFlag.ItemIsUserCheckable
-                    | QtCore.Qt.ItemFlag.ItemIsTristate
+                    | QtCore.Qt.ItemFlag.ItemIsAutoTristate
                 )
                 it_points.setCheckState(0, QtCore.Qt.Checked)
                 it_points.setData(0, QtCore.Qt.UserRole, {"kind": "points", "ds": ds_index})
