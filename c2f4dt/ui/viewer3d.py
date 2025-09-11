@@ -178,6 +178,16 @@ class Viewer3D(QtWidgets.QWidget):
         self._color_mode = "Solid"
         self._solid_color = (200, 200, 200)
         self._cmap = getattr(self, "_cmap", "viridis")
+        # ---- Normals (viewer defaults) ------------------------------------
+        # Publicly controllable via setters; copied per-dataset at add time.
+        # style: "Uniform" | "Axis RGB" | "RGB Components"
+        self._normals_style: str = "Axis RGB"
+        # Default uniform color in [0..1]
+        self._normals_color: tuple[float, float, float] = (0.9, 0.9, 0.2)
+        # Percentage of normals to visualize (1..100)
+        self._normals_percent: int = 50
+        # Scale slider 1..200 → glyph_len = diag * (scale / 1000.0)
+        self._normals_scale: int = 20
 
         # Rendering style & datasets registry
         self._points_as_spheres = getattr(self, "_points_as_spheres", False)  # user reported better perf with raw points
@@ -518,6 +528,7 @@ class Viewer3D(QtWidgets.QWidget):
         self._points_as_spheres = bool(enabled)
         self._refresh_datasets()
 
+
     def add_points(self, points, colors=None, normals=None) -> int:
         """Add a point cloud to the scene with smart coloring and optional normals.
 
@@ -602,6 +613,12 @@ class Viewer3D(QtWidgets.QWidget):
                 "color_mode": self._color_mode,
                 "cmap": self._cmap,
                 "points_as_spheres": self._points_as_spheres,
+                # ---- per-dataset normals state ----
+                "normals_visible": False,
+                "normals_style": self._normals_style,
+                "normals_color": self._normals_color,
+                "normals_percent": self._normals_percent,
+                "normals_scale": self._normals_scale,
             }
             self._datasets.append(rec)
             ds_index = len(self._datasets) - 1
@@ -672,9 +689,12 @@ class Viewer3D(QtWidgets.QWidget):
                 return None
 
     def _refresh_datasets(self) -> None:
-        """Rebuild all point actors according to current rendering settings.
+        """Rebuild all actors according to current rendering settings.
 
-        Preserves the internal registry schema and restores normals visibility if it was active.
+        Preserves:
+        - camera position/clip range,
+        - point-size on point actors,
+        - per-dataset normals state (visibility, style, color, percent, scale).
         """
         try:
             # Save camera
@@ -683,36 +703,46 @@ class Viewer3D(QtWidgets.QWidget):
             except Exception:
                 cam_pos = None
 
-            # Clear all and re-add
+            # Clear scene and rebuild dataset list
             self.plotter.clear()
-            new_list = []
+            new_list: list[dict] = []
+
             for old_rec in self._datasets:
                 kind = old_rec.get("kind", "points")
+
+                # ---------- Mesh datasets ----------
                 if kind == "mesh":
                     actor_mesh = None
                     if old_rec.get("visible", True):
-                        actor_mesh = self.plotter.add_mesh(
-                            old_rec.get("mesh"),
-                            color=old_rec.get("solid_color", self._solid_fallback),
-                            style="wireframe"
-                            if old_rec.get("representation", "surface") == "wireframe"
-                            else "surface",
-                            opacity=float(old_rec.get("opacity", 100)) / 100.0,
-                        )
+                        try:
+                            actor_mesh = self.plotter.add_mesh(
+                                old_rec.get("mesh"),
+                                color=old_rec.get("solid_color", self._solid_fallback),
+                                style="wireframe"
+                                if old_rec.get("representation", "surface") == "wireframe"
+                                else "surface",
+                                opacity=float(old_rec.get("opacity", 100)) / 100.0,
+                            )
+                        except Exception:
+                            actor_mesh = None
+
                     new_rec = dict(old_rec)
                     new_rec["actor_mesh"] = actor_mesh
                     new_list.append(new_rec)
                     continue
 
+                # ---------- Point datasets ----------
                 full_pdata = old_rec.get("full_pdata", old_rec.get("pdata"))
                 has_rgb = bool(old_rec.get("has_rgb", False))
                 was_visible = bool(old_rec.get("visible", True))
                 view_pct = int(old_rec.get("view_percent", 100))
 
+                # Apply view budget
                 pdata_for_view = self._apply_budget_to_polydata(
                     full_pdata, has_rgb, view_pct
                 )
 
+                # Re-add points actor according to color mode/cmap
                 actor_points = None
                 if was_visible:
                     actor_points = self._add_points_by_mode(
@@ -723,6 +753,7 @@ class Viewer3D(QtWidgets.QWidget):
                         old_rec.get("cmap", self._cmap),
                         old_rec.get("points_as_spheres", self._points_as_spheres),
                     )
+                    # Re-apply point size
                     try:
                         if actor_points is not None:
                             prop = actor_points.GetProperty()
@@ -731,12 +762,13 @@ class Viewer3D(QtWidgets.QWidget):
                     except Exception:
                         pass
 
+                # Base new record
                 new_rec = {
                     "kind": "points",
                     "full_pdata": full_pdata,
                     "pdata": pdata_for_view,
                     "actor_points": actor_points,
-                    "actor_normals": None,
+                    "actor_normals": None,  # will be rebuilt below if needed
                     "has_rgb": has_rgb,
                     "solid_color": old_rec.get("solid_color", self._solid_fallback),
                     "visible": was_visible,
@@ -747,21 +779,33 @@ class Viewer3D(QtWidgets.QWidget):
                     "points_as_spheres": old_rec.get(
                         "points_as_spheres", self._points_as_spheres
                     ),
+                    # ---- Normals per-dataset state (carry over with sane defaults) ----
+                    "normals_visible": bool(old_rec.get("normals_visible", False)),
+                    "normals_style": str(old_rec.get("normals_style", getattr(self, "_normals_style", "Axis RGB"))),
+                    "normals_color": tuple(old_rec.get("normals_color", getattr(self, "_normals_color", (0.9, 0.9, 0.2)))),
+                    "normals_percent": int(old_rec.get("normals_percent", getattr(self, "_normals_percent", 50))),
+                    "normals_scale": int(old_rec.get("normals_scale", getattr(self, "_normals_scale", 20))),
                 }
                 new_list.append(new_rec)
 
-                # If normals actor was visible before, restore it when possible
+                # ---- Rebuild normals actor if it was visible ----
                 try:
-                    had_normals = bool(old_rec.get("actor_normals") is not None)
+                    if new_rec["normals_visible"] and hasattr(pdata_for_view, "point_data") and "Normals" in pdata_for_view.point_data:
+                        self._rebuild_normals_actor(
+                            ds=len(new_list) - 1, # here it was data_index
+                            style=new_rec["normals_style"],
+                            color=new_rec["normals_color"],
+                            percent=new_rec["normals_percent"],
+                            scale=new_rec["normals_scale"],
+                        )
                 except Exception:
-                    had_normals = False
-                if had_normals and hasattr(pdata_for_view, "point_data") and "Normals" in pdata_for_view.point_data:
-                    idx = len(new_list) - 1
-                    self.set_normals_visibility(idx, True)
+                    # Best-effort: keep going even if normals rebuild fails
+                    pass
 
+            # Swap registry
             self._datasets = new_list
 
-            # Re-apply current point size to all point actors after rebuild
+            # Ensure point-size is applied to all point actors (paranoia pass)
             try:
                 for rec in self._datasets:
                     if rec.get("kind") != "points":
@@ -781,8 +825,15 @@ class Viewer3D(QtWidgets.QWidget):
                     self.plotter.reset_camera_clipping_range()
                 except Exception:
                     pass
-            self.plotter.update()
+
+            # Final refresh
+            try:
+                self.plotter.update()
+            except Exception:
+                pass
+
         except Exception:
+            # Never raise from a refresh; keep UI responsive.
             pass
 
     def add_pyvista_mesh(self, mesh) -> int:
@@ -837,50 +888,204 @@ class Viewer3D(QtWidgets.QWidget):
         except Exception:
             pass
     
-    def set_normals_visibility(self, dataset_index: int, visible: bool, scale: float = 0.02) -> None:
-        """Show/hide normals glyphs for a given dataset."""
+    def apply_normals_properties(
+        self,
+        ds: int,
+        *,
+        style: str | None = None,
+        color: tuple[float, float, float] | None = None,
+        percent: int | None = None,
+        scale: int | None = None,
+        ensure_visible: bool = True,
+    ) -> None:
+        """Update per-dataset normals properties and optionally rebuild glyphs.
+
+        Args:
+            ds: Dataset index.
+            style: 'Uniform' | 'Axis RGB' | 'RGB Components'.
+            color: Uniform RGB (0..1 floats).
+            percent: 1..100 fraction of glyphs shown.
+            scale: 1..200 glyph magnitude slider value.
+            ensure_visible: If True, shows/rebuilds normals actor immediately.
+        """
+        try:
+            rec = self._datasets[ds]
+        except Exception:
+            return
+
+        if style is not None:
+            rec["normals_style"] = str(style)
+        if color is not None:
+            try:
+                r, g, b = color
+                rec["normals_color"] = (float(r), float(g), float(b))
+            except Exception:
+                pass
+        if percent is not None:
+            rec["normals_percent"] = int(max(1, min(100, int(percent))))
+        if scale is not None:
+            rec["normals_scale"] = int(max(1, min(200, int(scale))))
+
+        if ensure_visible:
+            # This will rebuild the actor with the latest properties
+            self.set_normals_visibility(ds, True)
+        elif rec.get("normals_visible"):
+            # Rebuild without toggling visibility
+            self._rebuild_normals_actor(
+                ds,
+                style=str(rec.get("normals_style", self._normals_style)),
+                color=tuple(rec.get("normals_color", self._normals_color)),
+                percent=int(rec.get("normals_percent", self._normals_percent)),
+                scale=int(rec.get("normals_scale", self._normals_scale)),
+            )
+            
+    def set_normals_visibility(self, dataset_index: int, visible: bool, scale: float | None = None) -> None:
+        """Show/hide normals glyphs for a given dataset.
+
+        This keeps per-dataset state and rebuilds the glyph actor as needed.
+
+        Args:
+            dataset_index: Target dataset index.
+            visible: True to show normals, False to hide them.
+            scale: Optional legacy float override (kept for backward compat).
+                   If provided, it is mapped to the new integer slider domain (1..200).
+        """
         try:
             rec = self._datasets[dataset_index]
         except Exception:
             return
 
+        # Hide path
+        if not visible:
+            try:
+                if rec.get("actor_normals") is not None:
+                    self.plotter.remove_actor(rec["actor_normals"])
+            except Exception:
+                pass
+            rec["actor_normals"] = None
+            rec["normals_visible"] = False
+            try:
+                self.plotter.update()
+            except Exception:
+                pass
+            return
+
+        # Show path: rebuild regardless of whether the budgeted pdata already carries "Normals"
+        # (the builder will source from rec["normals_array"] or full_pdata as needed)
+        pdata = rec.get("pdata")
+
+        # Optional legacy scale override
+        if scale is not None:
+            try:
+                s = int(max(1, min(200, round(float(scale) * 1000.0))))
+                rec["normals_scale"] = s
+            except Exception:
+                pass
+
+        self._rebuild_normals_actor(
+            dataset_index,
+            style=str(rec.get("normals_style", self._normals_style)),
+            color=tuple(rec.get("normals_color", self._normals_color)),
+            percent=int(rec.get("normals_percent", self._normals_percent)),
+            scale=int(rec.get("normals_scale", self._normals_scale)),
+        )
+        rec["normals_visible"] = True
         try:
-            import numpy as np
-            pdata = rec["pdata"]
-            if not visible:
-                if rec["actor_normals"] is not None:
-                    try:
-                        self.plotter.remove_actor(rec["actor_normals"])
-                    except Exception:
-                        pass
-                    rec["actor_normals"] = None
-                    self.plotter.update()
-                return
-
-            if "Normals" not in pdata.point_data:
-                return
-
-            if rec["actor_normals"] is None:
-                pts = pdata.points
-                nrm = pdata.point_data["Normals"]
-                if pts.shape[0] == 0:
-                    return
-                bb = np.array([pts.min(axis=0), pts.max(axis=0)])
-                diag = float(np.linalg.norm(bb[1] - bb[0]))
-                glyph_len = max(1e-9, diag * float(scale))
-
-                n = pts.shape[0]
-                step = max(1, int(np.ceil(n / 20000)))
-                pts_s = pts[::step]
-                nrm_s = nrm[::step]
-
-                import pyvista as pv  # type: ignore
-                arrows = pv.Arrow(start=pts_s, direction=nrm_s, scale=glyph_len)
-                rec["actor_normals"] = self.plotter.add_mesh(arrows, color=(0.9, 0.9, 0.2))
             self.plotter.update()
         except Exception:
             pass
     
+        # ---- Public normals setters -------------------------------------------
+    def set_normals_style(self, dataset_index: int, style: str) -> None:
+        """Set normals color style for a dataset and rebuild if visible."""
+        try:
+            rec = self._datasets[dataset_index]
+        except Exception:
+            return
+        style = str(style).strip()
+        if style not in ("Uniform", "Axis RGB", "RGB Components"):
+            style = "Axis RGB"
+        rec["normals_style"] = style
+        if rec.get("normals_visible", False):
+            self._rebuild_normals_actor(
+                dataset_index,
+                style=style,
+                color=tuple(rec.get("normals_color", self._normals_color)),
+                percent=int(rec.get("normals_percent", self._normals_percent)),
+                scale=int(rec.get("normals_scale", self._normals_scale)),
+            )
+            try:
+                self.plotter.update()
+            except Exception:
+                pass
+
+    def set_normals_color(self, dataset_index: int, r: int, g: int, b: int) -> None:
+        """Set uniform color for normals (used only in 'Uniform' style)."""
+        try:
+            rec = self._datasets[dataset_index]
+        except Exception:
+            return
+        color = (
+            max(0, min(255, int(r))) / 255.0,
+            max(0, min(255, int(g))) / 255.0,
+            max(0, min(255, int(b))) / 255.0,
+        )
+        rec["normals_color"] = color
+        if rec.get("normals_visible", False) and rec.get("normals_style") == "Uniform":
+            self._rebuild_normals_actor(
+                dataset_index,
+                style="Uniform",
+                color=color,
+                percent=int(rec.get("normals_percent", self._normals_percent)),
+                scale=int(rec.get("normals_scale", self._normals_scale)),
+            )
+            try:
+                self.plotter.update()
+            except Exception:
+                pass
+
+    def set_normals_fraction(self, dataset_index: int, percent: int) -> None:
+        """Set the percentage (1..100) of normals to draw and rebuild if visible."""
+        try:
+            rec = self._datasets[dataset_index]
+        except Exception:
+            return
+        p = max(1, min(100, int(percent)))
+        rec["normals_percent"] = p
+        if rec.get("normals_visible", False):
+            self._rebuild_normals_actor(
+                dataset_index,
+                style=str(rec.get("normals_style", self._normals_style)),
+                color=tuple(rec.get("normals_color", self._normals_color)),
+                percent=p,
+                scale=int(rec.get("normals_scale", self._normals_scale)),
+            )
+            try:
+                self.plotter.update()
+            except Exception:
+                pass
+
+    def set_normals_scale(self, dataset_index: int, scale: int) -> None:
+        """Set the glyph scale slider value (1..200) and rebuild if visible."""
+        try:
+            rec = self._datasets[dataset_index]
+        except Exception:
+            return
+        s = max(1, min(200, int(scale)))
+        rec["normals_scale"] = s
+        if rec.get("normals_visible", False):
+            self._rebuild_normals_actor(
+                dataset_index,
+                style=str(rec.get("normals_style", self._normals_style)),
+                color=tuple(rec.get("normals_color", self._normals_color)),
+                percent=int(rec.get("normals_percent", self._normals_percent)),
+                scale=s,
+            )
+            try:
+                self.plotter.update()
+            except Exception:
+                pass
+
     def set_points_visibility(self, dataset_index: int, visible: bool) -> None:
         """Show/hide the points actor for a dataset by removing/adding the actor."""
         try:
@@ -1060,17 +1265,266 @@ class Viewer3D(QtWidgets.QWidget):
 
         return out
     
-    # def set_point_budget(self, percent: int) -> None:
-    #     """Set 1–100% of points to render per dataset (view-only LOD) and refresh."""
-    #     try:
-    #         p = int(percent)
-    #     except Exception:
-    #         return
-    #     p = max(1, min(100, p))
-    #     if getattr(self, "_view_budget_percent", 100) == p:
-    #         return
-    #     self._view_budget_percent = p
-    #     self._refresh_datasets()
+        # ---- Internals: normals helpers ---------------------------------------
+    def _dataset_diag(self, pdata) -> float:
+        """Return scene-space diagonal length for a PolyData's bounds."""
+        try:
+            import numpy as np
+            pts = pdata.points
+            if pts.size == 0:
+                return 1.0
+            bb = np.array([pts.min(axis=0), pts.max(axis=0)])
+            return float(np.linalg.norm(bb[1] - bb[0])) or 1.0
+        except Exception:
+            return 1.0
+
+    def _normals_subset(self, pts, nrm, percent: int):
+        """Return a deterministic subset of points+normals given a percentage."""
+        import numpy as np
+        p = max(1, min(100, int(percent)))
+        n = pts.shape[0]
+        if n <= 20000 and p >= 100:
+            return pts, nrm
+        q = np.round(pts * 1e4).astype(np.int64)
+        h = ((q[:, 0] * 73856093) ^ (q[:, 1] * 19349663) ^ (q[:, 2] * 83492791)) & 0xFFFFFFFF
+        mask = (h % 100) < p
+        if not mask.any():
+            mask[0] = True
+        return pts[mask], nrm[mask]
+
+    def _normals_colors(self, pts, nrm, style: str, uniform_rgb: tuple[float, float, float]):
+        """Compute per-glyph colors according to the selected style."""
+        import numpy as np
+        if style == "Axis RGB":
+            c = np.abs(nrm[:, :3])
+            c = c / np.maximum(1e-12, c.max(axis=1, keepdims=True))
+            return c
+        if style == "RGB Components":
+            c = (nrm[:, :3] * 0.5) + 0.5
+            return c
+        return None
+
+    import numpy as _np
+    import pyvista as _pv
+
+    def _get_normals_array(self, pdata) -> _np.ndarray | None:
+        # 1) proprietà comoda
+        import numpy as _np
+        import pyvista as _pv
+        try:
+            n = getattr(pdata, "point_normals", None)
+            if n is not None:
+                n = _np.asarray(n)
+                if n.ndim == 2 and n.shape[1] == 3:
+                    return n
+        except Exception:
+            pass
+        # 2) chiavi comuni
+        try:
+            pcd = getattr(pdata, "point_data", {})
+            for key in ("Normals", "normals", "PointNormals"):
+                if key in pcd:
+                    n = _np.asarray(pcd[key])
+                    if n.ndim == 2 and n.shape[1] == 3:
+                        return n
+        except Exception:
+            pass
+        return None
+
+    def _rebuild_normals_actor(self, ds: int,
+                            style: str = "Uniform",
+                            color: tuple[float, float, float] = (1.0, 0.2, 0.2),
+                            percent: int = 10,
+                            scale: int = 30) -> None:
+        """(Re)build normals glyph actor for dataset `ds`."""
+        import numpy as _np
+        import pyvista as _pv
+        try:
+            rec = self._datasets[ds]
+        except Exception:
+            return
+
+        # Remove previous
+        try:
+            if rec.get("actor_normals") is not None:
+                self.plotter.remove_actor(rec["actor_normals"])
+        except Exception:
+            pass
+        rec["actor_normals"] = None
+
+        pdata = rec.get("pdata")
+        if pdata is None or getattr(pdata, "n_points", 0) == 0:
+            print("[Normals] pdata missing or empty")
+            return
+
+        pdata_view = rec.get("pdata")
+        full_pdata = rec.get("full_pdata", pdata_view)
+
+        if full_pdata is None or getattr(full_pdata, "n_points", 0) == 0:
+            print("[Normals] pdata missing or empty")
+            return
+
+        # Points from FULL dataset (aligns best with worker-produced normals)
+        P = _np.asarray(full_pdata.points, dtype=float)
+
+        # Normals priority:
+        # 1) result saved by the worker (rec["normals_array"])
+        # 2) arrays already present on full_pdata
+        # 3) arrays on the budgeted view (if any)
+        # 4) as last resort, compute in place on full_pdata
+        N = rec.get("normals_array", None)
+
+        if N is None:
+            N = self._get_normals_array(full_pdata)
+
+        if N is None and pdata_view is not None:
+            N = self._get_normals_array(pdata_view)
+
+        if N is None:
+            try:
+                full_pdata.compute_normals(point_normals=True, inplace=True)
+                N = self._get_normals_array(full_pdata)
+            except Exception:
+                N = None
+
+        if N is None:
+            print("[Normals] No normals array found")
+            return
+
+        # Clean + normalize, reconcile lengths
+        N = _np.asarray(N, dtype=float)
+        P = _np.asarray(P, dtype=float)
+
+        nP = int(P.shape[0]) if P.ndim == 2 and P.shape[1] == 3 else 0
+        nN = int(N.shape[0]) if N.ndim == 2 and N.shape[1] == 3 else 0
+        if nP == 0 or nN == 0:
+            return
+        if nP != nN:
+            m = min(nP, nN)
+            P = P[:m]
+            N = N[:m]
+
+        ok = _np.isfinite(N).all(axis=1)
+        ok &= _np.isfinite(P).all(axis=1)
+        if not ok.any():
+            return
+        N = N[ok]
+        P = P[ok]
+        if N.size == 0 or P.size == 0:
+            return
+
+        # Normalize normals
+        norm = _np.linalg.norm(N, axis=1)
+        eps = 1e-12
+        nz = norm > eps
+        N[nz] = (N[nz].T / norm[nz]).T
+        N[~nz] = _np.array([0.0, 0.0, 1.0])
+
+        npts = P.shape[0]
+        perc = int(max(1, min(100, percent)))
+        nsamp = max(1, int(round(npts * (perc / 100.0))))
+        rng = _np.random.default_rng(12345 + int(ds))
+        idx = rng.choice(npts, size=nsamp, replace=False) if nsamp < npts else _np.arange(npts)
+
+        scl = float(max(1, min(200, int(scale)))) * 0.01
+
+        try:
+            # Compute a stable glyph length based on dataset diagonal (scale slider: 1..200 -> /1000)
+            diag = self._dataset_diag(full_pdata)
+            factor = max(diag * (float(scale) / 1000.0), 1e-9)
+
+            # Build arrow glyphs explicitly so we can attach per-glyph RGB
+            centers = _pv.PolyData(P[idx])
+            centers["vectors"] = N[idx]
+            arrow = _pv.Arrow()  # default small arrow geometry
+            glyph = centers.glyph(orient="vectors", scale=False, factor=factor, geom=arrow)
+
+            # Decide coloring
+            if style == "Uniform":
+                # Single uniform color
+                actor = self.plotter.add_mesh(
+                    glyph,
+                    color=(float(color[0]), float(color[1]), float(color[2])),
+                    name=f"normals_ds{ds}",
+                )
+            # --- dentro _rebuild_normals_actor, nel blocco "else:" per gli stili non 'Uniform' ---
+            else:
+                # Per-glyph RGB based on style (Axis RGB / RGB Components)
+                C = self._normals_colors(P[idx], N[idx], style, color)
+                if C is None:
+                    # Fallback a colore uniforme se stile non riconosciuto
+                    actor = self.plotter.add_mesh(
+                        glyph,
+                        color=(float(color[0]), float(color[1]), float(color[2])),
+                        name=f"normals_ds{ds}",
+                    )
+                else:
+                    import numpy as _np
+                    # RGB per freccia in [0..255] uint8
+                    rgb = _np.asarray(_np.clip(_np.round(C * 255.0), 0, 255), dtype=_np.uint8)
+
+                    k = rgb.shape[0]  # numero di frecce (= nsamp)
+                    # Tentativo 1: per-cella
+                    try:
+                        cells_per = max(1, int(glyph.n_cells // max(1, k)))
+                        rgb_cells = _np.repeat(rgb, cells_per, axis=0)
+                        # Allinea esattamente alla lunghezza richiesta
+                        if rgb_cells.shape[0] < glyph.n_cells:
+                            pad = _np.repeat(rgb[-1:], glyph.n_cells - rgb_cells.shape[0], axis=0)
+                            rgb_cells = _np.concatenate([rgb_cells, pad], axis=0)
+                        elif rgb_cells.shape[0] > glyph.n_cells:
+                            rgb_cells = rgb_cells[:glyph.n_cells]
+
+                        glyph.cell_data["RGB"] = rgb_cells
+                        actor = self.plotter.add_mesh(
+                            glyph,
+                            scalars="RGB",
+                            rgb=True,
+                            name=f"normals_ds{ds}",
+                        )
+                    except Exception:
+                        # Tentativo 2: per-punto
+                        try:
+                            pts_per = max(1, int(glyph.n_points // max(1, k)))
+                            rgb_pts = _np.repeat(rgb, pts_per, axis=0)
+                            if rgb_pts.shape[0] < glyph.n_points:
+                                pad = _np.repeat(rgb[-1:], glyph.n_points - rgb_pts.shape[0], axis=0)
+                                rgb_pts = _np.concatenate([rgb_pts, pad], axis=0)
+                            elif rgb_pts.shape[0] > glyph.n_points:
+                                rgb_pts = rgb_pts[:glyph.n_points]
+
+                            glyph.point_data["RGB"] = rgb_pts
+                            actor = self.plotter.add_mesh(
+                                glyph,
+                                scalars="RGB",
+                                rgb=True,
+                                name=f"normals_ds{ds}",
+                            )
+                        except Exception:
+                            # Ultimo fallback: colore uniforme
+                            actor = self.plotter.add_mesh(
+                                glyph,
+                                color=(float(color[0]), float(color[1]), float(color[2])),
+                                name=f"normals_ds{ds}",
+                            )
+
+            rec["actor_normals"] = actor
+            rec["normals_visible"] = True
+            rec["normals_style"] = style
+            rec["normals_color"] = color
+            rec["normals_percent"] = perc
+            rec["normals_scale"] = int(scale)
+
+            try:
+                self.plotter.update()
+            except Exception:
+                pass
+            # print(f"[Normals] ds={ds} points={npts} shown={idx.size} factor={factor:.6f}")
+        except Exception as ex:
+            print(f"[Normals] normals glyph failed: {ex}")
+            rec["actor_normals"] = None
+            rec["normals_visible"] = False
+
     def set_point_budget(self, percent: int, dataset_index: int | None = None) -> None:
         """Set visible percent for points globally or for a specific dataset."""
         try:

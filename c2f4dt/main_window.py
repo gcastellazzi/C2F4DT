@@ -3,13 +3,15 @@ import os
 from typing import Optional
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .utils.theme import apply_user_theme
-from .utils.systeminfo import disk_usage_percent
-from .utils.icons import qicon
-from .plugins.manager import PluginManager
-from .ui.console import ConsoleWidget
-from .ui.viewer3d import Viewer3DPlaceholder
-from .ui.display_panel import DisplayPanel
+import json
+
+from c2f4dt.utils.theme import apply_user_theme
+from c2f4dt.utils.systeminfo import disk_usage_percent
+from c2f4dt.utils.icons import qicon
+from plugins.manager import PluginManager
+from c2f4dt.ui.console import ConsoleWidget
+from c2f4dt.ui.viewer3d import Viewer3DPlaceholder
+from c2f4dt.ui.display_panel import DisplayPanel
 
 try:
     from .ui.viewer3d import Viewer3D as _Viewer3D
@@ -17,6 +19,138 @@ try:
 except Exception:
     _HAS_PYVISTA = False
     _Viewer3D = Viewer3DPlaceholder
+
+class _NormalsWorker(QtCore.QObject):
+    """Background worker to compute point-cloud normals.
+
+    Signals:
+        progress(int): Progress percentage [0..100].
+        message(str): Human-friendly status.
+        finished(object): Returns Nx3 normals (float64) or None on failure/cancel.
+
+    The algorithm uses a PCA on k-NN neighborhoods. If ``fast`` is True and the
+    point count is larger than ``fast_max_points``, it computes normals on a
+    random subset and propagates them to the full set via nearest neighbors if
+    SciPy is available; otherwise it falls back to full PCA.
+    """
+
+    progress = QtCore.Signal(int)
+    message = QtCore.Signal(str)
+    finished = QtCore.Signal(object)
+
+    def __init__(self, points, k=16, subset_size=80000, fast=True, fast_max_points=250000):
+        super().__init__()
+        self._P = points
+        self._k = int(max(3, k))
+        self._subset = int(max(1000, subset_size))
+        self._fast = bool(fast)
+        self._fast_max = int(max(10000, fast_max_points))
+        self._cancel = False
+
+    def request_cancel(self):
+        self._cancel = True
+
+    def _pca_normals(self, P, k):
+        import numpy as np
+        from numpy.linalg import eigh
+        # Prefer SciPy KDTree for stable kNN on macOS
+        idx = None
+        try:
+            from scipy.spatial import cKDTree  # type: ignore
+            tree = cKDTree(P)
+            # query k neighbors for each point (include point itself)
+            _, idx = tree.query(P, k=min(k, P.shape[0]))
+            if idx.ndim == 1:  # when k==1 returns shape (N,)
+                idx = idx[:, None]
+        except Exception:
+            # Fallback: use a partial argpartition per-point (O(N log N) approx)
+            n = P.shape[0]
+            idx = np.empty((n, k), dtype=int)
+            # Precompute squared norms for speed
+            for i in range(n):
+                # distances to all points
+                d2 = np.sum((P - P[i])**2, axis=1)
+                # get k smallest indices (including i)
+                sel = np.argpartition(d2, kth=min(k, n-1))[:k]
+                idx[i, :sel.shape[0]] = sel
+                if sel.shape[0] < k:
+                    # wrap-fill if needed
+                    wrap = np.resize(sel, k)
+                    idx[i] = wrap
+        N = np.empty_like(P)
+        # compute normals via smallest eigenvector of covariance
+        for i in range(P.shape[0]):
+            if self._cancel:
+                return None
+            nbrs = P[idx[i]]
+            C = np.cov(nbrs.T)
+            w, v = eigh(C)
+            n = v[:, 0]  # eigenvector of smallest eigenvalue
+            # orient consistently (optional): point roughly outward from centroid
+            if np.dot(n, P[i] - nbrs.mean(axis=0)) < 0:
+                n = -n
+            N[i] = n
+            if i % 1000 == 0:
+                self.progress.emit(int(5 + 90 * i / max(1, P.shape[0])))
+        return N
+
+    @QtCore.Slot()
+    def run(self):
+        import numpy as np
+        try:
+            P = np.asarray(self._P, dtype=float)
+            n = int(P.shape[0])
+            if n == 0 or P.shape[1] != 3:
+                self.message.emit("Invalid point cloud array")
+                self.finished.emit(None)
+                return
+            self.message.emit(f"Computing normals (N={n}, k={self._k})…")
+            self.progress.emit(2)
+
+            if self._fast and n > self._fast_max:
+                self.message.emit("FAST mode: subset + propagate…")
+                # subset
+                rng = np.random.default_rng(42)
+                pick = rng.choice(n, size=min(self._subset, n), replace=False)
+                Psub = P[pick]
+                # compute on subset
+                self.progress.emit(4)
+                Nsub = self._pca_normals(Psub, self._k)
+                if Nsub is None:
+                    self.finished.emit(None)
+                    return
+                # propagate using nearest neighbors if SciPy available
+                try:
+                    from scipy.spatial import cKDTree  # type: ignore
+                    tree = cKDTree(Psub)
+                    _, j = tree.query(P, k=1)
+                    N = Nsub[j]
+                except Exception:
+                    # As a last resort, avoid quadratic cost; compute full normals instead
+                    self.message.emit("Propagation unavailable; switching to full PCA…")
+                    N = self._pca_normals(P, self._k)
+                    if N is None:
+                        self.finished.emit(None)
+                        return
+            else:
+                N = self._pca_normals(P, self._k)
+                if N is None:
+                    self.finished.emit(None)
+                    return
+
+            # --- PUSH NORMALS INTO VIEWER POLYDATA + SHOW THEM -------------------
+            try:
+                ds = self._current_dataset_index()
+            except Exception:
+                ds = None
+
+            self.progress.emit(100)
+            self.message.emit("Normals ready")
+            self.finished.emit(N)
+        except Exception as ex:
+            self.message.emit(f"Normals failed: {ex}")
+            self.finished.emit(None)
+
 
 class MainWindow(QtWidgets.QMainWindow):
     """
@@ -45,7 +179,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._build_central_area()
         self._build_statusbar()
 
-        self.plugin_manager = PluginManager(self, extensions_dir=self._default_extensions_dir())
+        self.plugin_manager = PluginManager(self, plugins_dir=self._default_plugins_dir())
         self._populate_plugins_ui()
 
         self._start_disk_timer()
@@ -56,6 +190,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Preferences
         self.downsample_method = "random"  # or "voxel"
+        self._session_path: Optional[str] = None
 
         # Tree update guard to avoid cascading on auto-updates/partial states
         self._tree_updating = False
@@ -113,9 +248,9 @@ class MainWindow(QtWidgets.QMainWindow):
         y = avail.y() + (avail.height() - h) // 2
         self.setGeometry(x, y, w, h)
 
-    def _default_extensions_dir(self) -> str:
-        base = os.path.dirname(os.path.dirname(__file__))
-        return os.path.join(base, "..", "extensions")
+    def _default_plugins_dir(self) -> str:
+        base = os.path.dirname(os.path.dirname(__file__))  # .../C2F4DT/c2f4dt
+        return os.path.join(base, "plugins")
 
     def _build_actions(self) -> None:
         self.act_new = QtGui.QAction(qicon("32x32_document-new.png"), "New", self)
@@ -126,6 +261,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_save.setShortcut(QtGui.QKeySequence.Save)
         self.act_save_as = QtGui.QAction(qicon("32x32_document-save-as.png"), "Save As…", self)
         self.act_save_as.setShortcut(QtGui.QKeySequence.SaveAs)
+        self.act_new.triggered.connect(self._on_new_session)
+        self.act_open.triggered.connect(self._on_open_session)
+        self.act_save.triggered.connect(self._on_save_session)
+        self.act_save_as.triggered.connect(self._on_save_session_as)
         self.act_import_cloud = QtGui.QAction(qicon("32x32_import_cloud.png"), "Import Cloud", self)
         self.act_import_cloud.triggered.connect(self._on_import_cloud)
 
@@ -168,6 +307,20 @@ class MainWindow(QtWidgets.QMainWindow):
         m_tools = menubar.addMenu("&Tools")
         for a in [self.act_create_grid, self.act_toggle_grid, self.act_toggle_normals]:
             m_tools.addAction(a)
+        
+        # --- Tree behaviour submenu -----------------------------------
+        m_tree = m_tools.addMenu("Tree")
+        self.act_tree_propagate = QtGui.QAction("Parent check toggles children", self)
+        self.act_tree_propagate.setCheckable(True)
+        self.act_tree_propagate.setChecked(True)  # default: come ora (propaga ai figli)
+        m_tree.addAction(self.act_tree_propagate)
+
+
+        # Activate Plugins menu
+        self.m_plugins = menubar.addMenu("&Plugins")
+        self.m_plugins.setToolTipsVisible(True)
+        self.m_plugins_about_to_show = False
+        
 
         # Rendering submenu
         self.act_safe_render = QtGui.QAction("Safe Rendering (macOS)", self)
@@ -250,6 +403,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.act_iso_m.triggered.connect(lambda: self.viewer3d.view_iso(False))
         self.act_invert.triggered.connect(lambda: self.viewer3d.invert_view())
         self.act_refresh.triggered.connect(lambda: self.viewer3d.refresh())
+        #
+        self.act_toggle_normals.toggled.connect(self._on_toggle_normals_clicked)
+
 
     def _build_central_area(self) -> None:
         central = QtWidgets.QWidget(self)
@@ -271,15 +427,27 @@ class MainWindow(QtWidgets.QMainWindow):
         self.treeMCTS.customContextMenuRequested.connect(self._on_tree_context_menu)
         self.treeMCTS.itemSelectionChanged.connect(self._on_tree_selection_changed)
         split.addWidget(self.treeMCTS)
-        # React to check/uncheck from the MCTS tree (avoid duplicates)
-        # (spostato refresh dopo la creazione di viewer3d)
-        self.treeMCTS.itemChanged.connect(
-            self._on_tree_item_changed,
-            QtCore.Qt.ConnectionType.UniqueConnection
-        )
+
 
         self.scrollDISPLAY = QtWidgets.QScrollArea(); self.scrollDISPLAY.setWidgetResizable(True)
         self.displayPanel = DisplayPanel(); self.scrollDISPLAY.setWidget(self.displayPanel)
+        # --- Wire normals UI from DisplayPanel ---
+        dp = self.displayPanel
+        dp.sigNormalsStyleChanged.connect(self._on_normals_style_changed)
+        dp.sigNormalsColorChanged.connect(self._on_normals_color_changed)
+        dp.sigNormalsPercentChanged.connect(self._on_normals_percent_changed)
+        dp.sigNormalsScaleChanged.connect(self._on_normals_scale_changed)
+        dp.sigComputeNormals.connect(self._on_compute_normals)       # già esistente, riusa il tuo handler
+        dp.sigFastNormalsChanged.connect(self._on_fast_normals_toggled)  # opzionale: salva preferenza FAST
+        # Wire DisplayPanel normals actions to the main window logic
+        try:
+            self.displayPanel.sigComputeNormals.connect(self._on_compute_normals, QtCore.Qt.ConnectionType.QueuedConnection)
+        except Exception:
+            pass
+        try:
+            self.displayPanel.sigFastNormalsChanged.connect(lambda on: setattr(self, "normals_fast_enabled", bool(on)))
+        except Exception:
+            pass
         split.addWidget(self.scrollDISPLAY)
 
         v.addWidget(split)
@@ -299,8 +467,26 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.tabINSPECTOR = QtWidgets.QWidget()
         v4 = QtWidgets.QVBoxLayout(self.tabINSPECTOR)
-        self.treeMCT = QtWidgets.QTreeWidget(); self.treeMCT.setHeaderLabels(["Current MCT"])
-        v4.addWidget(self.treeMCT)
+
+        # Top bar with a Refresh button for the Inspector
+        bar_ins = QtWidgets.QHBoxLayout()
+        bar_ins.addStretch(1)
+        self.btnRefreshInspector = QtWidgets.QPushButton("Refresh")
+        self.btnRefreshInspector.setObjectName("btnRefreshInspector")
+        bar_ins.addWidget(self.btnRefreshInspector)
+        v4.addLayout(bar_ins)
+
+        # Tree that shows the current MCT content
+        self.treeMCT = QtWidgets.QTreeWidget()
+        self.treeMCT.setObjectName("treeMCT")
+        self.treeMCT.setHeaderLabels(["Key", "Value"])
+        self.treeMCT.setColumnCount(2)
+        self.treeMCT.header().setStretchLastSection(True)
+        v4.addWidget(self.treeMCT, 1)
+
+        # Hook up refresh
+        self.btnRefreshInspector.clicked.connect(self._refresh_inspector_tree)
+
         self.tabINTERACTION.addTab(self.tabINSPECTOR, "INSPECTOR")
 
         viewer_container = QtWidgets.QWidget()
@@ -312,10 +498,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.comboPlugins.addItem("— No plugins installed —"); self.comboPlugins.setEnabled(False)
         bar_plugin.addWidget(QtWidgets.QLabel("Plugin scope:"))
         bar_plugin.addWidget(self.comboPlugins, 1)
+        self.comboPlugins.activated.connect(self._on_plugin_combo_activated)
+        
         viewer_layout.addLayout(bar_plugin)
 
         self.viewer3d = _Viewer3D()
         viewer_layout.addWidget(self.viewer3d, 1)
+        # React to check/uncheck from the MCTS tree (avoid duplicates)
+        self.treeMCTS.itemChanged.connect(
+            self._on_tree_item_changed,
+            QtCore.Qt.ConnectionType.UniqueConnection
+        )
         # Ora che viewer3d esiste, aggiorna la visibilità
         self._refresh_tree_visibility()
 
@@ -349,6 +542,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.displayPanel.sigColormapChanged.connect(self._on_colormap_changed)
         self.displayPanel.sigMeshRepresentationChanged.connect(self._on_mesh_rep_changed)
         self.displayPanel.sigMeshOpacityChanged.connect(self._on_mesh_opacity_changed)
+        # --- Normals visualization ---
+        self.displayPanel.sigNormalsStyleChanged.connect(self._on_normals_style_changed)
+        self.displayPanel.sigNormalsColorChanged.connect(self._on_normals_color_changed)
+        self.displayPanel.sigNormalsPercentChanged.connect(self._on_normals_percent_changed)
+        self.displayPanel.sigNormalsScaleChanged.connect(self._on_normals_scale_changed)
+        #
 
     def _on_console_executed(self, cmd: str) -> None:
         """Append executed console command to the MESSAGES panel."""
@@ -379,6 +578,19 @@ class MainWindow(QtWidgets.QMainWindow):
         # Find dataset info and ds_index
         info = self._dataset_info_from_item(item)
         ds_index = info.get("ds") if info else None
+        #
+        # ... dopo aver determinato ds_index / entry_to_use ...
+        try:
+            ds = self._current_dataset_index()
+            if ds is not None:
+                recs = getattr(self.viewer3d, "_datasets", [])
+                if 0 <= ds < len(recs):
+                    nvis = bool(recs[ds].get("normals_visible", False))
+                    self.act_toggle_normals.blockSignals(True)
+                    self.act_toggle_normals.setChecked(nvis)
+                    self.act_toggle_normals.blockSignals(False)
+        except Exception:
+            pass
         # Select the correct entry if it exists for ds_index
         entry_to_use = entry
         if ds_index is not None:
@@ -391,6 +603,300 @@ class MainWindow(QtWidgets.QMainWindow):
         if info:
             self.displayPanel.set_mode(info.get("kind", "points"))
             self.displayPanel.apply_properties(entry_to_use)
+        # Keep the INSPECTOR tab in sync with the current MCT
+        try:
+            self._refresh_inspector_tree()
+        except Exception:
+            pass
+
+
+    def _refresh_inspector_tree(self) -> None:
+        """Rebuild the Inspector tree from a synthesized snapshot of the current state.
+        Includes: current mct entry, viewer settings, per-dataset details and app options.
+        """
+        try:
+            data = self._inspector_current_payload()
+            self._populate_inspector_tree(data)
+        except Exception:
+            # Best effort: clear on failure
+            try:
+                self.treeMCT.clear()
+            except Exception:
+                pass
+
+    def _inspector_current_payload(self) -> dict:
+        """Collect a rich snapshot of the current session for the INSPECTOR tab.
+
+        Structure:
+            {
+                'mct': ...,                    # currently selected entry (as-is)
+                'options': { ... },            # app/UI options affecting behavior
+                'plugins': [ ... ],            # plugins summary from PluginManager
+                'viewer': { ... },             # global viewer settings
+                'dataset': { ... },            # details for the currently selected dataset
+            }
+        """
+        payload: dict = {}
+
+        # --- mct (as-is) -----------------------------------------------------
+        try:
+            payload['mct'] = self.mct
+        except Exception:
+            payload['mct'] = None
+
+        # --- options (app-wide knobs) ----------------------------------------
+        opts = {}
+        try:
+            opts['downsample_method'] = getattr(self, 'downsample_method', None)
+        except Exception:
+            pass
+        # Normals controls (from DisplayPanel if available)
+        try:
+            fast = None
+            if hasattr(self, 'displayPanel') and self.displayPanel is not None:
+                # `fast_normals_enabled()` is our helper; fallback to attr
+                try:
+                    fast = bool(self.displayPanel.fast_normals_enabled())
+                except Exception:
+                    fast = None
+            if fast is None:
+                fast = bool(getattr(self, 'normals_fast_enabled', False))
+            opts['normals_fast_enabled'] = fast
+        except Exception:
+            pass
+        for k, default in (('normals_k', 16), ('normals_fast_max_points', 250_000)):
+            try:
+                opts[k] = getattr(self, k)
+            except Exception:
+                opts[k] = default
+        payload['options'] = opts
+
+        # --- plugins summary --------------------------------------------------
+        plugs = []
+        try:
+            items = self.plugin_manager.ui_combo_items()
+            for it in items:
+                plugs.append({
+                    'key': it.get('key'),
+                    'label': it.get('label'),
+                    'enabled': it.get('enabled', True),
+                    'color': it.get('color'),
+                    'tooltip': it.get('tooltip', ''),
+                    'order': it.get('order'),
+                })
+        except Exception:
+            pass
+        payload['plugins'] = plugs
+
+        # --- viewer global settings ------------------------------------------
+        viewer = {}
+        try:
+            v = self.viewer3d
+            viewer['color_mode'] = getattr(v, '_color_mode', None)
+            viewer['colormap'] = getattr(v, '_cmap', None)
+            viewer['point_size'] = getattr(v, '_point_size', None)
+            viewer['view_budget_percent'] = getattr(v, '_view_budget_percent', None)
+            viewer['points_as_spheres'] = getattr(v, '_points_as_spheres', None)
+            # Safe rendering toggle (if exposed via menu action)
+            try:
+                viewer['safe_rendering'] = bool(self.act_safe_render.isChecked())
+            except Exception:
+                viewer['safe_rendering'] = None
+            # Counts
+            try:
+                recs = getattr(v, '_datasets', [])
+                viewer['datasets_count'] = len(recs)
+            except Exception:
+                viewer['datasets_count'] = None
+        except Exception:
+            pass
+        payload['viewer'] = viewer
+
+        # --- current dataset details -----------------------------------------
+        ds_info = {}
+        try:
+            ds = self._current_dataset_index()
+            ds_info['index'] = ds
+            v = self.viewer3d
+            recs = getattr(v, '_datasets', [])
+            if isinstance(ds, int) and 0 <= ds < len(recs):
+                rec = recs[ds]
+                # Basic flags
+                ds_info['visible'] = bool(rec.get('visible', True))
+                ds_info['kind'] = rec.get('kind', 'points')
+                ds_info['solid_color'] = tuple(rec.get('solid_color', (1.0, 1.0, 1.0)))
+                # PolyData summary
+                try:
+                    pdata = rec.get('pdata')
+                    ds_info['n_points'] = int(getattr(pdata, 'n_points', 0)) if pdata is not None else None
+                    ds_info['n_cells'] = int(getattr(pdata, 'n_cells', 0)) if pdata is not None else None
+                    # Available arrays
+                    pt_names = []
+                    try:
+                        if hasattr(pdata, 'point_data'):
+                            pt_names = list(pdata.point_data.keys())
+                    except Exception:
+                        pass
+                    ds_info['point_arrays'] = pt_names
+                except Exception:
+                    pass
+                # Normals section (per-dataset state kept by viewer)
+                norms = {
+                    'has_normals_array': False,
+                    'normals_visible': bool(rec.get('normals_visible', False)),
+                    'normals_style': rec.get('normals_style'),
+                    'normals_color': tuple(rec.get('normals_color', (1.0, 0.8, 0.2))),
+                    'normals_percent': int(rec.get('normals_percent', getattr(v, '_normals_percent', 20))),
+                    'normals_scale': int(rec.get('normals_scale', getattr(v, '_normals_scale', 20))),
+                    'actor_exists': rec.get('actor_normals') is not None,
+                }
+                try:
+                    pdata = rec.get('pdata')
+                    norms['has_normals_array'] = bool(pdata is not None and ('Normals' in getattr(pdata, 'point_data', {})))
+                except Exception:
+                    pass
+                ds_info['normals'] = norms
+            else:
+                ds_info['note'] = 'No valid dataset selected.'
+        except Exception:
+            pass
+        payload['dataset'] = ds_info
+
+        return payload
+
+    def _populate_inspector_tree(self, data) -> None:
+        """Populate the Inspector QTreeWidget with a nested view of *data*."""
+        try:
+            self.treeMCT.clear()
+        except Exception:
+            return
+
+        root = QtWidgets.QTreeWidgetItem(["session", self._format_inspector_value(data)])
+        self.treeMCT.addTopLevelItem(root)
+        self._inspector_add_children(root, data)
+        try:
+            self.treeMCT.expandAll()
+        except Exception:
+            pass
+
+    def _inspector_add_children(self, parent: QtWidgets.QTreeWidgetItem, obj) -> None:
+        """Recursive expansion of mappings, sequences, numpy arrays, and PyVista datasets."""
+        # Avoid deep expansion of basic/leaf values
+        try:
+            import numpy as _np
+        except Exception:
+            _np = None
+        try:
+            import pyvista as _pv  # type: ignore
+        except Exception:
+            _pv = None
+
+        # Dict-like
+        try:
+            from collections.abc import Mapping, Sequence
+        except Exception:
+            Mapping, Sequence = dict, (list, tuple)  # fallbacks
+
+        if isinstance(obj, Mapping):
+            for k, v in obj.items():
+                key = str(k)
+                val = self._format_inspector_value(v)
+                child = QtWidgets.QTreeWidgetItem([key, val])
+                parent.addChild(child)
+                self._inspector_add_children(child, v)
+            return
+
+        # List/tuple-like (but not str/bytes)
+        if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
+            for i, v in enumerate(obj):
+                key = f"[{i}]"
+                val = self._format_inspector_value(v)
+                child = QtWidgets.QTreeWidgetItem([key, val])
+                parent.addChild(child)
+                self._inspector_add_children(child, v)
+            return
+
+        # numpy arrays: show shape/dtype
+        if _np is not None and isinstance(obj, _np.ndarray):
+            # Already summarized in the value; also expose shape/dtype explicitly
+            sh = tuple(obj.shape)
+            dt = str(obj.dtype)
+            parent.addChild(QtWidgets.QTreeWidgetItem(["shape", str(sh)]))
+            parent.addChild(QtWidgets.QTreeWidgetItem(["dtype", dt]))
+            return
+
+        # PyVista datasets: summarize counts and arrays
+        if _pv is not None and isinstance(obj, _pv.DataSet):
+            try:
+                parent.addChild(QtWidgets.QTreeWidgetItem(["type", type(obj).__name__]))
+            except Exception:
+                pass
+            try:
+                parent.addChild(QtWidgets.QTreeWidgetItem(["n_points", str(getattr(obj, "n_points", "?"))]))
+            except Exception:
+                pass
+            try:
+                parent.addChild(QtWidgets.QTreeWidgetItem(["n_cells", str(getattr(obj, "n_cells", "?"))]))
+            except Exception:
+                pass
+            # Point data arrays
+            try:
+                if hasattr(obj, "point_data") and len(obj.point_data) > 0:
+                    pd = QtWidgets.QTreeWidgetItem(["point_data", f"{len(obj.point_data)} arrays"])
+                    parent.addChild(pd)
+                    for name in obj.point_data.keys():
+                        arr = obj.point_data[name]
+                        label = f"{name}  shape={getattr(arr, 'shape', '?')} dtype={getattr(arr, 'dtype', '?')}"
+                        pd.addChild(QtWidgets.QTreeWidgetItem([name, label]))
+            except Exception:
+                pass
+            # Cell data arrays
+            try:
+                if hasattr(obj, "cell_data") and len(obj.cell_data) > 0:
+                    cd = QtWidgets.QTreeWidgetItem(["cell_data", f"{len(obj.cell_data)} arrays"])
+                    parent.addChild(cd)
+                    for name in obj.cell_data.keys():
+                        arr = obj.cell_data[name]
+                        label = f"{name}  shape={getattr(arr, 'shape', '?')} dtype={getattr(arr, 'dtype', '?')}"
+                        cd.addChild(QtWidgets.QTreeWidgetItem([name, label]))
+            except Exception:
+                pass
+            return
+        # Other types are treated as leaves
+
+    def _format_inspector_value(self, v) -> str:
+        """Short one-line summary for Inspector values."""
+        try:
+            import numpy as _np
+        except Exception:
+            _np = None
+        try:
+            import pyvista as _pv  # type: ignore
+        except Exception:
+            _pv = None
+
+        if v is None:
+            return "None"
+        if isinstance(v, (bool, int, float, str)):
+            return str(v)
+        if isinstance(v, dict):
+            return f"dict[{len(v)}]"
+        if isinstance(v, (list, tuple)):
+            return f"{type(v).__name__}[{len(v)}]"
+        if _np is not None and isinstance(v, _np.ndarray):
+            try:
+                return f"ndarray shape={v.shape} dtype={v.dtype}"
+            except Exception:
+                return "ndarray"
+        if _pv is not None and isinstance(v, _pv.DataSet):
+            try:
+                npts = getattr(v, 'n_points', '?')
+                ncells = getattr(v, 'n_cells', '?')
+                return f"{type(v).__name__} (pts={npts}, cells={ncells})"
+            except Exception:
+                return type(v).__name__
+        # Generic fallback
+        return type(v).__name__
 
     def _reset_viewer3d_from_tree(self) -> None:
         """
@@ -546,28 +1052,87 @@ class MainWindow(QtWidgets.QMainWindow):
         self.viewer3d.set_mesh_opacity(ds, int(val))
         if self.mct:
             self.mct["opacity"] = int(val)
+    
 
+    def _on_toggle_normals_clicked(self, on: bool) -> None:
+        """Toggle Normals dal pulsante della toolbar sul dataset selezionato."""
+        ds = self._current_dataset_index()
+        if ds is None:
+            # niente dataset selezionato
+            return
+
+        # Se non esiste il nodo "Normals" nel tree, crealo (non lo spunta ancora).
+        try:
+            self._ensure_normals_tree_child(ds)
+        except Exception:
+            pass
+
+        # Attiva/disattiva visibilità lato viewer
+        try:
+            getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, bool(on))
+        except Exception:
+            return
+
+        # Sincronizza lo stato del nodo "Normals" nell'albero (se presente)
+        try:
+            item = self.treeMCTS.currentItem()
+            if item is not None:
+                # sali al root (file)
+                root = item
+                while root.parent() is not None:
+                    root = root.parent()
+                # trova il figlio "Point cloud" e poi "Normals"
+                target = None
+                for i in range(root.childCount()):
+                    if root.child(i).text(0) == "Point cloud":
+                        target = root.child(i)
+                        break
+                if target is not None:
+                    for i in range(target.childCount()):
+                        ch = target.child(i)
+                        data = ch.data(0, QtCore.Qt.ItemDataRole.UserRole)
+                        if ch.text(0) == "Normals" and isinstance(data, dict) and data.get("ds") == ds:
+                            ch.setCheckState(0, QtCore.Qt.CheckState.Checked if on else QtCore.Qt.CheckState.Unchecked)
+                            break
+        except Exception:
+            pass
+        
     def _build_statusbar(self) -> None:
         sb = QtWidgets.QStatusBar(self)
         self.setStatusBar(sb)
 
+        # --- Widgets -----------------------------------------------------
         self.btnCancel = QtWidgets.QPushButton("CANCEL")
         self.btnCancel.setObjectName("buttonCANCEL")
         self.btnCancel.setEnabled(False)
+        self.btnCancel.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred)
 
         self.progress = QtWidgets.QProgressBar()
         self.progress.setObjectName("barPROGRESS")
-        self.progress.setRange(0, 100); self.progress.setValue(0)
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
         self.progress.setFormat("Idle")
+        self.progress.setTextVisible(True)
+        self.progress.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
 
         self.disk = QtWidgets.QProgressBar()
         self.disk.setObjectName("diskUsageBar")
-        self.disk.setRange(0, 100); self.disk.setValue(0)
+        self.disk.setRange(0, 100)
+        self.disk.setValue(0)
         self.disk.setTextVisible(True)
+        self.disk.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
 
-        sb.addWidget(self.btnCancel, 0)
-        sb.addWidget(self.progress, 1)
-        sb.addPermanentWidget(self.disk, 0)
+        # Container to control layout & stretches (so showMessage won't hide widgets)
+        panel = QtWidgets.QWidget()
+        lay = QtWidgets.QHBoxLayout(panel)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        lay.addWidget(self.btnCancel)
+        lay.addWidget(self.progress, 3)  # ~60%
+        lay.addWidget(self.disk, 2)      # ~40%
+
+        # Add as permanent widget so temporary status messages don't hide it
+        sb.addPermanentWidget(panel, 1)
 
     def _start_disk_timer(self) -> None:
         self._disk_timer = QtCore.QTimer(self)
@@ -580,15 +1145,496 @@ class MainWindow(QtWidgets.QMainWindow):
         self.disk.setValue(int(percent))
         self.disk.setFormat(f"Disk used: {percent:.0f}%")
 
+    def _on_compute_normals(self) -> None:
+        """Compute point‑cloud normals in a background thread (non‑blocking UI).
+
+        Priority: PCA on k-NN neighborhoods with optional FAST mode (subset + propagate).
+        On success, stores normals into the current dataset entry and updates the UI.
+        """
+        import numpy as np
+
+        self._progress_start("Starting normals computation…")
+        self._ensure_cancel_button()
+
+        # Grab current dataset points from viewer cache if available via self.mct
+        entry = getattr(self, "mct", None)
+        if not entry or entry.get("ds_index") is None:
+            self._append_message("[Normals] No active dataset selected.")
+            self._progress_finish("Normals not computed: no dataset")
+            return
+        ds = int(entry["ds_index"]) if entry.get("ds_index") is not None else None
+
+        # Try to fetch points back from viewer; fall back to stored structures if available
+        P = None
+        try:
+            datasets = getattr(self.viewer3d, "_datasets", [])
+            if isinstance(ds, int) and 0 <= ds < len(datasets):
+                fp = datasets[ds].get("full_pdata") or datasets[ds].get("pdata")
+                # Expect PyVista PolyData or numpy array alike
+                if hasattr(fp, "points"):
+                    P = np.asarray(fp.points, dtype=float)
+                elif hasattr(fp, "to_numpy"):
+                    P = np.asarray(fp.to_numpy(), dtype=float)
+                else:
+                    P = np.asarray(fp, dtype=float)
+        except Exception:
+            P = None
+
+        if P is None or P.ndim != 2 or P.shape[1] != 3 or P.shape[0] == 0:
+            self._append_message("[Normals] Cannot access points for current dataset.")
+            self._progress_finish("Normals not computed: invalid points")
+            return
+
+        # Read fast flag
+        # Fast-mode flag: prefer DisplayPanel state if present, otherwise fallback
+        fast_flag = False
+        try:
+            if hasattr(self, "displayPanel") and self.displayPanel is not None:
+                fast_flag = bool(self.displayPanel.fast_normals_enabled())
+            else:
+                fast_flag = bool(getattr(self, "normals_fast_enabled", False))
+        except Exception:
+            pass
+
+        # Parameters (you can expose k via settings later)
+        k_nn = int(getattr(self, "normals_k", 16))
+        max_fast = int(getattr(self, "normals_fast_max_points", 250_000))
+
+        # Harden against macOS/Accelerate and OpenMP threading issues inside background threads
+        try:
+            import os as _os
+            _os.environ.setdefault("OMP_NUM_THREADS", "1")
+            _os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+            _os.environ.setdefault("MKL_NUM_THREADS", "1")
+            _os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+            _os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+        except Exception:
+            pass
+
+        # Prepare worker
+        worker = _NormalsWorker(points=P, k=k_nn, subset_size=80_000,
+                                fast=fast_flag, fast_max_points=max_fast)
+        thread = QtCore.QThread(self)
+        worker.moveToThread(thread)
+
+        # last_txt = {"txt": "Normals…"}
+
+        self._last_progress_text = "Normals…"
+
+        # salva contesto per lo slot di fine
+        self._normals_ctx = {"P": P, "ds": ds, "entry": entry, "thread": thread}
+
+        # connessioni ai nuovi slot (GUI thread garantito)
+        worker.progress.connect(self._slot_worker_progress, QtCore.Qt.ConnectionType.QueuedConnection)
+        worker.message.connect(self._slot_worker_message, QtCore.Qt.ConnectionType.QueuedConnection)
+        worker.finished.connect(self._slot_worker_finished, QtCore.Qt.ConnectionType.QueuedConnection)
+
+        thread.started.connect(worker.run)
+        thread.start()
+
+
+        # Expose active job for cancellation
+        self._active_job = {"worker": worker, "thread": thread}
+        self.btnCancel.clicked.connect(self._on_cancel_job, QtCore.Qt.ConnectionType.UniqueConnection)
+        self.btnCancel.setEnabled(True)
+
+    # ------------------------------------------------------------------
+    # Session I/O: New / Open / Save / Save As
+    # ------------------------------------------------------------------
+    def _on_new_session(self) -> None:
+        """Start a new empty session, clearing tree, viewer and state."""
+        try:
+            if self.mcts:
+                ret = QtWidgets.QMessageBox.question(
+                    self, "New Session",
+                    "Discard current session and start a new one?",
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                    QtWidgets.QMessageBox.No,
+                )
+                if ret != QtWidgets.QMessageBox.Yes:
+                    return
+        except Exception:
+            pass
+        # Clear UI state
+        try:
+            self.treeMCTS.clear()
+        except Exception:
+            pass
+        try:
+            if hasattr(self.viewer3d, "clear"):
+                self.viewer3d.clear()
+        except Exception:
+            pass
+        self.mcts = {}
+        self.mct = {}
+        self._session_path = None
+        try:
+            self.statusBar().showMessage("New session", 3000)
+        except Exception:
+            pass
+
+    def _on_open_session(self) -> None:
+        """Open a saved C2F4DT session (.c2f4dt.json)."""
+        dlg = QtWidgets.QFileDialog(self, "Open session")
+        dlg.setFileMode(QtWidgets.QFileDialog.ExistingFile)
+        dlg.setNameFilters(["C2F4DT Session (*.c2f4dt.json)", "JSON (*.json)", "All files (*)"])
+        if not dlg.exec():
+            return
+        paths = dlg.selectedFiles()
+        if not paths:
+            return
+        self._load_session_from_file(paths[0])
+
+    def _on_save_session(self) -> None:
+        """Save the current session to disk; if untitled, fallback to Save As."""
+        if not self._session_path:
+            self._on_save_session_as()
+            return
+        data = self._session_snapshot()
+        try:
+            with open(self._session_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            try:
+                self.statusBar().showMessage(f"Saved session to {os.path.basename(self._session_path)}", 3000)
+            except Exception:
+                pass
+        except Exception as ex:
+            QtWidgets.QMessageBox.critical(self, "Save error", str(ex))
+
+    def _on_save_session_as(self) -> None:
+        """Prompt for a path and save the session JSON there."""
+        dlg = QtWidgets.QFileDialog(self, "Save session as")
+        dlg.setAcceptMode(QtWidgets.QFileDialog.AcceptSave)
+        dlg.setNameFilters(["C2F4DT Session (*.c2f4dt.json)", "JSON (*.json)", "All files (*)"])
+        dlg.setDefaultSuffix("c2f4dt.json")
+        if not dlg.exec():
+            return
+        paths = dlg.selectedFiles()
+        if not paths:
+            return
+        self._session_path = paths[0]
+        # ensure extension
+        if not (self._session_path.endswith(".c2f4dt.json") or self._session_path.endswith(".json")):
+            self._session_path += ".c2f4dt.json"
+        self._on_save_session()
+
+    def _session_snapshot(self) -> dict:
+        """Capture a lightweight, JSON‑serializable snapshot of the current session."""
+        snap: dict = {"version": 1, "datasets": [], "viewer": {}, "options": {}}
+        # Viewer globals
+        try:
+            v = self.viewer3d
+            snap["viewer"] = {
+                "color_mode": getattr(v, "_color_mode", None),
+                "colormap": getattr(v, "_cmap", None),
+                "point_size": getattr(v, "_point_size", None),
+                "view_budget_percent": getattr(v, "_view_budget_percent", None),
+                "points_as_spheres": getattr(v, "_points_as_spheres", None),
+            }
+        except Exception:
+            pass
+        # App options
+        try:
+            snap["options"]["downsample_method"] = getattr(self, "downsample_method", None)
+            snap["options"]["normals_fast_enabled"] = bool(getattr(self, "normals_fast_enabled", False))
+            snap["options"]["normals_k"] = int(getattr(self, "normals_k", 16))
+            snap["options"]["normals_fast_max_points"] = int(getattr(self, "normals_fast_max_points", 250_000))
+        except Exception:
+            pass
+        # Datasets (from mcts registry)
+        try:
+            for name, entry in self.mcts.items():
+                ds = {
+                    "name": name,
+                    "kind": entry.get("kind"),
+                    "ds_index": entry.get("ds_index"),
+                    "point_size": entry.get("point_size"),
+                    "point_budget": entry.get("point_budget"),
+                    "color_mode": entry.get("color_mode"),
+                    "colormap": entry.get("colormap"),
+                    "solid_color": entry.get("solid_color"),
+                    "points_as_spheres": entry.get("points_as_spheres"),
+                    # Optional: if your importers store the original path
+                    "source_path": entry.get("source_path"),
+                }
+                snap["datasets"].append(ds)
+        except Exception:
+            pass
+        return snap
+
+    def _load_session_from_file(self, path: str) -> None:
+        """Load a session JSON and rebuild the scene as much as possible.
+
+        If a dataset has `source_path`, it will be re-imported automatically.
+        """
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as ex:
+            QtWidgets.QMessageBox.critical(self, "Open error", f"Cannot read session: {ex}")
+            return
+        # Reset current state
+        self._on_new_session()
+        self._session_path = path
+        # Restore viewer/app options (best effort)
+        try:
+            opts = data.get("options", {})
+            self.downsample_method = opts.get("downsample_method", self.downsample_method)
+            self.normals_fast_enabled = bool(opts.get("normals_fast_enabled", getattr(self, "normals_fast_enabled", False)))
+            self.normals_k = int(opts.get("normals_k", getattr(self, "normals_k", 16)))
+            self.normals_fast_max_points = int(opts.get("normals_fast_max_points", getattr(self, "normals_fast_max_points", 250_000)))
+        except Exception:
+            pass
+        # Re-import datasets by source_path if available
+        restored = 0
+        for ds in data.get("datasets", []):
+            src = ds.get("source_path")
+            if src and os.path.exists(src):
+                try:
+                    # Use programmatic import if available
+                    if hasattr(self, "import_cloud_programmatic"):
+                        self.import_cloud_programmatic(src)
+                        restored += 1
+                except Exception:
+                    continue
+        try:
+            self.statusBar().showMessage(f"Opened session: restored {restored} dataset(s)", 5000)
+        except Exception:
+            pass
+
     def _populate_plugins_ui(self) -> None:
-        names = self.plugin_manager.available_plugins()
+        """Riempi la combo e ricostruisci il menù Plugins con le azioni esposte dai plugin."""
+        items = self.plugin_manager.ui_combo_items()
         self.comboPlugins.clear()
-        if not names:
+        if not items:
             self.comboPlugins.addItem("— No plugins installed —")
             self.comboPlugins.setEnabled(False)
         else:
-            self.comboPlugins.addItems(names)
             self.comboPlugins.setEnabled(True)
+
+            color_map = {
+                "red": QtGui.QColor("#e53935"),
+                "green": QtGui.QColor("#43a047"),
+                "gray": QtGui.QColor("#9e9e9e"),
+                "black": QtGui.QColor("#000000"),
+            }
+
+            for it in items:
+                self.comboPlugins.addItem(it["label"], userData=it.get("key"))
+                idx = self.comboPlugins.count() - 1
+                # tooltip e colore
+                self.comboPlugins.setItemData(idx, it.get("tooltip", ""), QtCore.Qt.ItemDataRole.ToolTipRole)
+                qcol = color_map.get(it.get("color", "black"), color_map["black"])
+                self.comboPlugins.setItemData(idx, qcol, QtCore.Qt.ItemDataRole.TextColorRole)
+                # disabilita se non disponibile
+                if not it.get("enabled", True):
+                    mdl = self.comboPlugins.model()
+                    mitem = mdl.item(idx)
+                    if mitem is not None:
+                        mitem.setEnabled(False)
+
+        # Ricostruisci il menù Plugins
+        try:
+            self._rebuild_plugins_menu(items)
+        except Exception:
+            pass
+
+    # --------------------- Plugins wiring ---------------------------------
+
+    def _plugin_context(self) -> dict:
+        """Contesto standard passato ai plugin."""
+        return {
+            "window": self,
+            "viewer3d": getattr(self, "viewer3d", None),
+            "mcts": getattr(self, "mcts", {}),
+            "mct": getattr(self, "mct", {}),
+            "current_dataset": self._current_dataset_index(),
+            "display": getattr(self, "displayPanel", None),
+            "console": getattr(self, "console", None),
+            # aggiungi qui oggetti utili che i tuoi plugin si aspettano
+        }
+
+    @QtCore.Slot(int)
+    def _on_plugin_combo_activated(self, index: int) -> None:
+        try:
+            key = self.comboPlugins.itemData(index)  # lo impostiamo in _populate_plugins_ui
+            if not key:
+                return
+            self._run_plugin_by_key(str(key))
+        except Exception as ex:
+            QtWidgets.QMessageBox.warning(self, "Plugin", f"Cannot run plugin: {ex}")
+
+    def _run_plugin_by_key(self, key: str) -> None:
+        """Trova il plugin per 'key' e prova ad eseguirlo in modo robusto (senza introspezione fragile)."""
+        try:
+            # 1) recupera l'oggetto plugin (lazy get)
+            plugin = None
+            for attr in ("get", "plugin_by_key"):
+                fn_get = getattr(self.plugin_manager, attr, None)
+                if callable(fn_get):
+                    plugin = fn_get(key)
+                    break
+
+            # fallback: guarda nella lista items se già istanziato
+            if plugin is None:
+                try:
+                    for it in self.plugin_manager.ui_combo_items():
+                        if it.get("key") == key and it.get("plugin_obj") is not None:
+                            plugin = it["plugin_obj"]
+                            break
+                except Exception:
+                    pass
+
+            if plugin is None:
+                QtWidgets.QMessageBox.warning(self, "Plugin", f"Plugin '{key}' not found.")
+                return
+
+            ctx = self._plugin_context()
+
+            # helper per chiamare callables in modo sicuro
+            def _call_safe(fn):
+                try:
+                    fn(ctx)
+                    return True
+                except TypeError:
+                    try:
+                        fn()
+                        return True
+                    except Exception:
+                        return False
+                except Exception:
+                    return False
+
+            # 2) se il plugin espone azioni strutturate, usale
+            actions = None
+            for attr in ("actions", "get_actions"):
+                getter = getattr(plugin, attr, None)
+                if callable(getter):
+                    try:
+                        actions = getter()
+                    except Exception:
+                        actions = None
+                    break
+
+            if isinstance(actions, (list, tuple)) and actions:
+                if len(actions) == 1:
+                    self._invoke_plugin_action(plugin, actions[0], ctx)
+                    return
+                menu = QtWidgets.QMenu(self)
+                for desc in actions:
+                    act = QtGui.QAction(str(desc.get("label", "Action")), self)
+                    act.triggered.connect(lambda _=False, d=desc: self._invoke_plugin_action(plugin, d, ctx))
+                    menu.addAction(act)
+                pt = self.comboPlugins.mapToGlobal(QtCore.QPoint(0, self.comboPlugins.height()))
+                menu.exec(pt)
+                return
+
+            # 3) entry-point comuni del plugin (metodi d'istanza)
+            for attr in ("run", "apply", "open", "open_dialog", "show", "__call__"):
+                fn = getattr(plugin, attr, None)
+                if callable(fn) and _call_safe(fn):
+                    return
+
+            # 4) modulo con funzioni globali
+            import types
+            if isinstance(plugin, types.ModuleType):
+                for attr in ("run", "main"):
+                    fn = getattr(plugin, attr, None)
+                    if callable(fn) and _call_safe(fn):
+                        return
+
+            QtWidgets.QMessageBox.information(self, "Plugin", f"Plugin '{key}' non espone azioni note.")
+        except Exception as ex:
+            QtWidgets.QMessageBox.critical(self, "Plugin error", str(ex))
+
+    def _invoke_plugin_action(self, plugin, action_desc, ctx: dict) -> None:
+        """Esegue una singola azione del plugin, descritta come dict:
+           {'label': 'Do X', 'slot': callable} oppure {'label':..., 'method': 'run'}.
+        """
+        try:
+            slot = action_desc.get("slot")
+            if callable(slot):
+                # tenta (ctx) se il callable accetta argomenti
+                try:
+                    slot(ctx)
+                except TypeError:
+                    slot()
+                return
+            method_name = action_desc.get("method") or action_desc.get("name")
+            if method_name and hasattr(plugin, method_name):
+                fn = getattr(plugin, method_name)
+                try:
+                    fn(ctx)
+                except TypeError:
+                    fn()
+                return
+            # fallback: se c'è 'command' stringa e il plugin ha un dispatcher
+            cmd = action_desc.get("command")
+            if cmd and hasattr(plugin, "dispatch"):
+                plugin.dispatch(cmd, ctx)
+                return
+            raise RuntimeError("Unsupported action descriptor")
+        except Exception as ex:
+            QtWidgets.QMessageBox.critical(self, "Plugin action error", str(ex))
+
+    def _rebuild_plugins_menu(self, items: list[dict]) -> None:
+        """Rigenera il menù &Plugins con le azioni dei plugin."""
+        if not hasattr(self, "m_plugins") or self.m_plugins is None:
+            return
+        self.m_plugins.clear()
+        if not items:
+            act = QtGui.QAction("No plugins installed", self)
+            act.setEnabled(False)
+            self.m_plugins.addAction(act)
+            return
+
+        for it in items:
+            key = it.get("key")
+            label = it.get("label", key or "Plugin")
+            tooltip = it.get("tooltip", "")
+            enabled = bool(it.get("enabled", True))
+
+            submenu = QtWidgets.QMenu(label, self.m_plugins)
+            submenu.setEnabled(enabled)
+            if tooltip:
+                submenu.setToolTipsVisible(True)
+                submenu.setToolTip(tooltip)
+
+            # prova a ottenere il plugin e le sue azioni
+            plugin = None
+            get_fn = getattr(self.plugin_manager, "get", None)
+            if callable(get_fn):
+                try:
+                    plugin = get_fn(key)
+                except Exception:
+                    plugin = None
+            actions = None
+            if plugin is not None:
+                for attr in ("actions", "get_actions"):
+                    getter = getattr(plugin, attr, None)
+                    if callable(getter):
+                        try:
+                            actions = getter()
+                        except Exception:
+                            actions = None
+                        break
+
+            if isinstance(actions, (list, tuple)) and actions:
+                # crea QAction per ciascuna azione
+                for a in actions:
+                    q = QtGui.QAction(str(a.get("label", "Action")), self)
+                    q.setToolTip(str(a.get("tooltip", "")))
+                    q.triggered.connect(lambda _=False, plug=plugin, desc=a: self._invoke_plugin_action(plug, desc, self._plugin_context()))
+                    submenu.addAction(q)
+            else:
+                # azione di default: Run <label>
+                run_act = QtGui.QAction(f"Run {label}", self)
+                run_act.setToolTip("Execute default entry-point")
+                run_act.triggered.connect(lambda _=False, k=key: self._run_plugin_by_key(k))
+                submenu.addAction(run_act)
+
+            self.m_plugins.addMenu(submenu)
+
 
     def _on_undo_changed(self) -> None:
         self.act_undo.setEnabled(self.undo_stack.canUndo())
@@ -660,21 +1706,21 @@ class MainWindow(QtWidgets.QMainWindow):
                 return arr
 
         def _compute_normals(obj):
-            """Compute rough normals if missing using PyVista (best-effort)."""
+            """Compute rough normals if missing using the _on_compute_normals method."""
             try:
-                import numpy as _np
-                import pyvista as _pv  # type: ignore
-                if obj.points is None or obj.points.shape[0] == 0:
-                    return None
-                pdata = _pv.PolyData(_np.asarray(obj.points))
-                pdata = pdata.compute_normals(
-                    consistent=False,
-                    auto_orient_normals=False,
-                    feature_angle=180.0,
-                )
-                n = getattr(pdata, 'point_normals', None)
-                if n is not None:
-                    return _np.asarray(n, dtype=_np.float32)
+                # Temporarily set the current dataset to the object being processed
+                ds_index = self.viewer3d.add_points(obj.points, obj.colors, getattr(obj, "normals", None))
+                self.mct = {
+                    "name": obj.name,
+                    "kind": obj.kind,
+                    "ds_index": ds_index,
+                }
+                # Trigger the computation of normals
+                self._on_compute_normals()
+                # Retrieve the computed normals from the viewer's dataset
+                datasets = getattr(self.viewer3d, "_datasets", [])
+                if isinstance(ds_index, int) and 0 <= ds_index < len(datasets):
+                    return datasets[ds_index].get("normals_array")
             except Exception:
                 return None
             return None
@@ -724,7 +1770,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # Heuristic caps similar to viewer3d (_target_visible_points)
             points_as_spheres = bool(getattr(self.viewer3d, "_points_as_spheres", False))
             if sys.platform == "darwin":
-                cap = 1_000_000 if points_as_spheres else 4_000_000
+                cap = 600_000 if points_as_spheres else 2_000_000
             else:
                 cap = 2_200_000 if points_as_spheres else 8_000_000
 
@@ -790,15 +1836,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 ds_index = self.viewer3d.add_pyvista_mesh(obj.pv_mesh)
             
             
-            # Restore previous color mode ### CHECH THIS - WHY WE NEED TO RESTORE THE PREVIOUS COLOR MODE?
-            # try:
-            #     if prev_mode is not None:
-            #         self.viewer3d.set_color_mode(prev_mode)
-            # except Exception:
-            #     pass
-
-            #
-            # Tree: gerarchico, selezionabile, con metadati.
             # Tree: hierarchical, checkable, with metadata.
             self.treeMCTS.blockSignals(True)
             root = QtWidgets.QTreeWidgetItem([obj.name])
@@ -817,7 +1854,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 it_points.setFlags(
                     it_points.flags()
                     | QtCore.Qt.ItemFlag.ItemIsUserCheckable
-                    | QtCore.Qt.ItemFlag.ItemIsAutoTristate
+                    # | QtCore.Qt.ItemFlag.ItemIsAutoTristate
                 )
                 it_points.setCheckState(0, QtCore.Qt.CheckState.Checked)
                 it_points.setData(0, QtCore.Qt.ItemDataRole.UserRole, {"kind": "points", "ds": ds_index})
@@ -855,6 +1892,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     "has_intensity": getattr(obj, 'intensity', None) is not None,
                     "has_normals": getattr(obj, 'normals', None) is not None,
                     "ds_index": ds_index,
+                    "source_path": path,  # keep original file path for session reopen
                 }
                 if obj.kind == "points":
                     entry.update(
@@ -903,64 +1941,13 @@ class MainWindow(QtWidgets.QMainWindow):
             # Ricalcola la visibilità iniziale dopo l'importazione.
             self._refresh_tree_visibility()
 
-    def _update_parent_checkstate(self, child: QtWidgets.QTreeWidgetItem) -> None:
-        """Aggiorna gli antenati in base ai figli (tri-stato manuale).
-        Update ancestors according to children (manual tri-state)."""
-        if child is None:
-            return
-        self._tree_updating = True
-        try:
-            parent = child.parent()
-            while parent is not None:
-                total = parent.childCount()
-                if total == 0:
-                    break
-                checked = 0
-                unchecked = 0
-                for i in range(total):
-                    st = parent.child(i).checkState(0)
-                    if st == QtCore.Qt.CheckState.Checked:
-                        checked += 1
-                    elif st == QtCore.Qt.CheckState.Unchecked:
-                        unchecked += 1
-                if checked == total:
-                    parent.setCheckState(0, QtCore.Qt.CheckState.Checked)
-                elif unchecked == total:
-                    parent.setCheckState(0, QtCore.Qt.CheckState.Unchecked)
-                else:
-                    parent.setCheckState(0, QtCore.Qt.CheckState.PartiallyChecked)
-                parent = parent.parent()
-        finally:
-            self._tree_updating = False
 
-    def _set_descendant_checkstate(
-        self, item: QtWidgets.QTreeWidgetItem, state: QtCore.Qt.CheckState
-    ) -> None:
-        """Imposta lo stato di tutti i discendenti.
-        Set the check state of all descendants."""
-        for i in range(item.childCount()):
-            child = item.child(i)
-            child.setCheckState(0, state)
-            self._set_descendant_checkstate(child, state)
-
-    def _is_effectively_checked(self, item: QtWidgets.QTreeWidgetItem) -> bool:
-        """Return True if *this item* is checked and no ancestor is Unchecked.
-        PartiallyChecked ancestors are allowed (they indicate mixed children)."""
-        # L'item stesso deve essere Checked
-        if item.checkState(0) != QtCore.Qt.CheckState.Checked:
-            return False
-        # Qualsiasi antenato esplicitamente Unchecked blocca la visibilità
-        parent = item.parent()
-        while parent is not None:
-            if parent.checkState(0) == QtCore.Qt.CheckState.Unchecked:
-                return False
-            parent = parent.parent()
-        return True
 
     def _viewer_set_visibility(self, kind: str, ds: int, visible: bool) -> None:
-        """Instrada e logga la richiesta di visibilità verso il viewer, con controlli di debug."""
+        """Route and log the visibility request to the viewer, with debug checks."""
         try:
-            self.txtMessages.appendPlainText(f"[MCTS] set_visibility kind={kind} ds={ds} visible={visible}")
+            current_time = datetime.now().strftime("%H:%M:%S")
+            self.txtMessages.appendPlainText(f"[{current_time}] [MCTS] set_visibility kind={kind} ds={ds} visible={visible}")
         except Exception:
             pass
 
@@ -995,10 +1982,10 @@ class MainWindow(QtWidgets.QMainWindow):
             
     def _refresh_tree_visibility(self) -> None:
         """
-        Ricalcola la visibilità delle geometrie in base all'albero.
-        Forza il foglio bianco nella viewer3d prima di ricostruire la visibilità.
+        Recalculate the visibility of geometries based on the tree.
+        Clears the viewer3d before reconstructing visibility.
         """
-        # Forza il foglio bianco
+        # Clear the viewer3d before recalculating visibility
         if hasattr(self.viewer3d, "clear"):
             try:
                 self.viewer3d.clear()
@@ -1017,25 +2004,176 @@ class MainWindow(QtWidgets.QMainWindow):
         for i in range(self.treeMCTS.topLevelItemCount()):
             recurse(self.treeMCTS.topLevelItem(i))
 
-    def _on_tree_item_changed(self, item: QtWidgets.QTreeWidgetItem, col: int) -> None:
-        # Evita la rientranza durante gli aggiornamenti programmati.
-        # Avoid re-entrancy during programmatic updates.
+    # def _on_tree_item_changed(self, item: QtWidgets.QTreeWidgetItem, col: int) -> None:
+    #     # Avoid re-entrancy during programmatic updates
+    #     if getattr(self, "_tree_updating", False):
+    #         return
+
+    #     state = item.checkState(0)
+    #     self._tree_updating = True
+    #     try:
+    #         # Propagate to descendants only if:
+    #         #  - the option is enabled
+    #         #  - the item has children (is a parent)
+    #         do_propagate = True
+    #         try:
+    #             do_propagate = bool(
+    #                 getattr(self, "act_tree_propagate", None) is not None
+    #                 and self.act_tree_propagate.isChecked()
+    #             )
+    #         except Exception:
+    #             do_propagate = True
+
+    #         if do_propagate and item.childCount() > 0:
+    #             self._set_descendant_checkstate(item, state)
+
+    #         # Update the tri-state status of ancestors
+    #         self._update_parent_checkstate(item)
+    #     finally:
+    #         self._tree_updating = False
+
+    #     # Recalculate the visibility of geometries
+    #     self._refresh_tree_visibility()
+
+    def _on_tree_item_changed(self, item, col):
         if getattr(self, "_tree_updating", False):
             return
 
+        data = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
         state = item.checkState(0)
+        is_checked = (state == QtCore.Qt.CheckState.Checked)
+
         self._tree_updating = True
         try:
-            self._set_descendant_checkstate(item, state)
-            self._update_parent_checkstate(item)
+            if isinstance(data, dict):
+                kind = data.get("kind")
+                ds = data.get("ds")
+
+                if kind == "normals":
+                    # toggle solo Normals
+                    if is_checked:
+                        visible = is_checked and self._is_effectively_checked(item)
+                        self.viewer3d.set_normals_visibility(int(ds), bool(visible))
+                        # self._update_parent_checkstate(item)
+                    else:
+                        self.viewer3d.set_normals_visibility(int(ds), False)
+                        # self._update_parent_checkstate(item)
+
+                elif kind == "points":
+                    if is_checked:
+                        # accendi solo i punti, lascia i figli come sono
+                        self.viewer3d.set_points_visibility(int(ds), True)
+                        self._update_parent_checkstate(item)
+                    else:
+                        # spegni punti e forza off tutti i discendenti
+                        self.viewer3d.set_points_visibility(int(ds), False)
+                        self._uncheck_descendants(item)    
+                        self._update_parent_checkstate(item)
+
+                elif kind == "mesh":
+                    visible = is_checked and self._is_effectively_checked(item)
+                    self.viewer3d.set_mesh_visibility(int(ds), bool(visible))
+                    if not is_checked:
+                        self._set_descendant_checkstate(item, QtCore.Qt.CheckState.Unchecked)
+                    self._update_parent_checkstate(item)
+
+                else:
+                    # fallback: comportamento classico
+                    self._set_descendant_checkstate(item, state)
+                    self._update_parent_checkstate(item)
+            else:
+                # nodo padre: propagazione classica
+                self._set_descendant_checkstate(item, state)
+                self._update_parent_checkstate(item)
         finally:
             self._tree_updating = False
-        self._refresh_tree_visibility()
-        try:
-            self.txtMessages.appendPlainText("[MCTS] tree item changed -> refreshed visibility")
-        except Exception:
-            pass
 
+        self._refresh_tree_visibility()
+
+    def _update_parent_checkstate(self, child: QtWidgets.QTreeWidgetItem) -> None:
+        """
+        Update ancestors according to these rules:
+        - If a parent has a 'points' child, the parent's state follows ONLY the state of 'points'.
+        - Otherwise: Checked if all children are Checked; Unchecked if all are Unchecked; otherwise PartiallyChecked.
+        - Does NOT modify children (no downward propagation here).
+        """
+        if child is None:
+            return
+
+        self._tree_updating = True
+        try:
+            parent = child.parent()
+            while parent is not None:
+                # 1) prova la regola "point-centric"
+                points_child = None
+                for i in range(parent.childCount()):
+                    c = parent.child(i)
+                    data = c.data(0, QtCore.Qt.ItemDataRole.UserRole)
+                    if isinstance(data, dict) and data.get("kind") == "points":
+                        points_child = c
+                        break
+
+                if points_child is not None:
+                    # Il parent segue SOLO lo stato del figlio "points"
+                    parent.setCheckState(0, points_child.checkState(0))
+                else:
+                    # 2) fallback: tri-stato classico basato su tutti i figli
+                    total = parent.childCount()
+                    if total == 0:
+                        break
+                    checked = 0
+                    unchecked = 0
+                    for i in range(total):
+                        st = parent.child(i).checkState(0)
+                        if st == QtCore.Qt.CheckState.Checked:
+                            checked += 1
+                        elif st == QtCore.Qt.CheckState.Unchecked:
+                            unchecked += 1
+                    if checked == total:
+                        parent.setCheckState(0, QtCore.Qt.CheckState.Checked)
+                    elif unchecked == total:
+                        parent.setCheckState(0, QtCore.Qt.CheckState.Unchecked)
+                    else:
+                        parent.setCheckState(0, QtCore.Qt.CheckState.PartiallyChecked)
+
+                parent = parent.parent()
+        finally:
+            self._tree_updating = False
+
+    def _uncheck_descendants(self, item: QtWidgets.QTreeWidgetItem) -> None:
+        """Spegni solo i discendenti (non accende nulla)."""
+        for i in range(item.childCount()):
+            child = item.child(i)
+            if child.checkState(0) != QtCore.Qt.CheckState.Unchecked:
+                child.setCheckState(0, QtCore.Qt.CheckState.Unchecked)
+            self._uncheck_descendants(child)
+
+    def _set_descendant_checkstate(
+        self, item: QtWidgets.QTreeWidgetItem, state: QtCore.Qt.CheckState
+        ) -> None:
+        """Set the check state of all descendants."""
+        for i in range(item.childCount()):
+            child = item.child(i)
+            child.setCheckState(0, state)
+            self._set_descendant_checkstate(child, state)
+
+    def _is_effectively_checked(self, item: QtWidgets.QTreeWidgetItem) -> bool:
+        """
+        Visible if *this* item is Checked and no ancestor is Unchecked.
+
+        - The current item must be Qt.Checked.
+        - Ancestors with Qt.PartiallyChecked do NOT block their children.
+        - An ancestor with Qt.Unchecked disables all its descendants.
+        """
+        if item is None or item.checkState(0) != QtCore.Qt.CheckState.Checked:
+            return False
+        parent = item.parent()
+        while parent is not None:
+            if parent.checkState(0) == QtCore.Qt.CheckState.Unchecked:
+                return False
+            parent = parent.parent()
+        return True
+    
     def _on_tree_context_menu(self, pos: QtCore.QPoint) -> None:
         item = self.treeMCTS.itemAt(pos)
         if item is None:
@@ -1311,7 +2449,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 it_points.setFlags(
                     it_points.flags()
                     | QtCore.Qt.ItemFlag.ItemIsUserCheckable
-                    | QtCore.Qt.ItemFlag.ItemIsAutoTristate
+                    # | QtCore.Qt.ItemFlag.ItemIsAutoTristate
                 )
                 it_points.setCheckState(0, QtCore.Qt.CheckState.Checked)
                 it_points.setData(0, QtCore.Qt.ItemDataRole.UserRole, {"kind": "points", "ds": ds_index})
@@ -1357,3 +2495,461 @@ class MainWindow(QtWidgets.QMainWindow):
                 pass
 
         self.statusBar().showMessage(f"Imported from {os.path.basename(path)}", 3000)
+    # ----------------------- Normals: UI helpers ----------------------------
+    # --- AGGIUNGI queste helper methods (ad es. subito sopra _append_message) ---
+    def _invoke_set_progress_value(self, v: int) -> None:
+        try:
+            val = int(v)
+            QtCore.QTimer.singleShot(0, lambda: self.progress.setValue(val))
+        except Exception:
+            pass
+
+    def _invoke_set_progress_format(self, text: str) -> None:
+        try:
+            msg = str(text)
+            QtCore.QTimer.singleShot(0, lambda: self.progress.setFormat(msg))
+        except Exception:
+            pass
+
+    def _invoke_append_message(self, text: str) -> None:
+        try:
+            msg = str(text)
+            QtCore.QTimer.singleShot(0, lambda: self.txtMessages.appendPlainText(msg))
+        except Exception:
+            pass
+
+    def _append_message(self, text: str) -> None:
+        self._invoke_append_message(text)
+
+    def _progress_start(self, text: str) -> None:
+        try:
+            self.progress.setRange(0, 100)
+            self._invoke_set_progress_value(0)
+            self._invoke_set_progress_format(text)
+        except Exception:
+            pass
+
+    def _progress_update(self, value: int, text: Optional[str] = None) -> None:
+        try:
+            v = max(0, min(100, int(value)))
+            self._invoke_set_progress_value(v)
+            if text is not None:
+                self._invoke_set_progress_format(text)
+        except Exception:
+            pass
+
+    def _progress_finish(self, text: str) -> None:
+        try:
+            self._invoke_set_progress_value(100)
+            self._invoke_set_progress_format(text)
+        except Exception:
+            pass
+
+    @QtCore.Slot(int)
+    def _slot_worker_progress(self, pct: int) -> None:
+        try:
+            txt = getattr(self, "_last_progress_text", "")
+            v = max(0, min(100, int(pct)))
+            self._progress_update(v, txt)
+        except Exception:
+            pass
+
+    @QtCore.Slot(str)
+    def _slot_worker_message(self, msg: str) -> None:
+        try:
+            self._last_progress_text = str(msg)
+            self._invoke_set_progress_format(self._last_progress_text)
+            self._invoke_append_message(self._last_progress_text)
+        except Exception:
+            pass
+
+    def _ensure_cancel_button(self) -> None:
+        """Enable the CANCEL button for an active job."""
+        try:
+            self.btnCancel.setEnabled(True)
+        except Exception:
+            pass
+
+    def _on_cancel_job(self) -> None:
+        """Request cancellation of the active job, if supported by the worker."""
+        job = getattr(self, "_active_job", None)
+        if not job:
+            return
+        worker = job.get("worker")
+        if hasattr(worker, "request_cancel"):
+            worker.request_cancel()
+        self._append_message("[Job] Cancel requested by user.")
+
+    def _ensure_normals_tree_child(self, ds_index: int) -> None:
+        """Ensure a 'Normals' child exists under the current file node for the active dataset."""
+        try:
+            item = self.treeMCTS.currentItem()
+            if item is None:
+                return
+            # Ascend to root file node
+            root = item
+            while root.parent() is not None:
+                root = root.parent()
+            # Look for a child labeled 'Point cloud' or existing 'Normals'
+            target = None
+            for i in range(root.childCount()):
+                c = root.child(i)
+                if c.text(0) == "Point cloud":
+                    target = c
+                if c.text(0) == "Normals":
+                    return  # already present at root level (older structure)
+            if target is None:
+                # Create the 'Point cloud' node if missing
+                target = QtWidgets.QTreeWidgetItem(["Point cloud"])
+                target.setFlags(target.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable | QtCore.Qt.ItemFlag.ItemIsAutoTristate)
+                target.setCheckState(0, QtCore.Qt.CheckState.Checked)
+                target.setData(0, QtCore.Qt.ItemDataRole.UserRole, {"kind": "points", "ds": ds_index})
+                root.addChild(target)
+            # Add Normals child if not present
+            for i in range(target.childCount()):
+                if target.child(i).text(0) == "Normals":
+                    return
+            it_normals = QtWidgets.QTreeWidgetItem(["Normals"])
+            it_normals.setFlags(it_normals.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
+            it_normals.setCheckState(0, QtCore.Qt.CheckState.Unchecked)
+            it_normals.setData(0, QtCore.Qt.ItemDataRole.UserRole, {"kind": "normals", "ds": ds_index})
+            target.addChild(it_normals)
+        except Exception:
+            pass
+    
+
+    @QtCore.Slot(object)
+    def _slot_worker_finished(self, N) -> None:
+        """Chiusura sicura del job: salva normali e aggiorna viewer (GUI thread)."""
+        import numpy as np
+        from datetime import datetime
+
+        ctx = getattr(self, "_normals_ctx", {}) or {}
+        P = ctx.get("P")
+        ds = ctx.get("ds")
+        entry = ctx.get("entry")
+        thread = ctx.get("thread")
+
+        try:
+            if N is None:
+                self._append_message("[Normals] Cancelled or failed.")
+                self._progress_finish("Normals computation cancelled or failed.")
+                return
+
+            N = np.asarray(N, dtype=float)
+            # Normalize the result to a well-formed (N,3) numpy array
+            try:
+                N = np.asarray(N, dtype=float)
+            except Exception:
+                N = None
+
+            if N is None or N.ndim != 2 or N.shape[1] != 3 or N.shape[0] == 0:
+                self._append_message(
+                    f"[Normals] Risultato non valido: shape={getattr(N, 'shape', None)}"
+                )
+                self._progress_finish("Normali non calcolate: risultato non valido.")
+                return
+
+            # Se il numero di righe non coincide con i punti catturati a inizio job,
+            # non fallire: logga e prosegui (verrà riconciliato nel viewer).
+            if P is not None and getattr(P, "shape", (0, 0))[0] != N.shape[0]:
+                self._append_message(
+                    f"[Normals] Warning: mismatch P/N rows. P={getattr(P, 'shape', None)} N={N.shape}. Adatto alla lunghezza minima."
+                )
+
+            # segna nel modello / cache
+            if isinstance(entry, dict):
+                entry["has_normals"] = True
+            try:
+                datasets = getattr(self.viewer3d, "_datasets", [])
+                if isinstance(ds, int) and 0 <= ds < len(datasets):
+                    datasets[ds]["normals_array"] = N
+            except Exception:
+                pass
+
+            self._append_message(f"[Normals] OK: {N.shape[0]} normali calcolate.")
+            self._progress_finish("Normali calcolate con successo!")
+
+            # assicura il nodo 'Normals' nell’albero e mostra in viewer
+            self._ensure_normals_tree_child(ds)
+            try:
+                getattr(self.viewer3d, "set_normals_data", lambda *_: None)(ds, N)
+                getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, True)
+                getattr(self.viewer3d, "refresh", lambda *_: None)()
+            except Exception:
+                pass
+            
+            # Defaults e sincronizzazione UI per la visualizzazione delle normali
+            try:
+                defaults = {
+                    "normals_style": self.mct.get("normals_style", "Axis RGB"),
+                    "normals_percent": self.mct.get("normals_percent", 1),
+                    "normals_scale": self.mct.get("normals_scale", 20),
+                }
+                self.mct.update(defaults)
+                getattr(self.viewer3d, "set_normals_style", lambda *_: None)(ds, defaults["normals_style"])
+                getattr(self.viewer3d, "set_normals_fraction", lambda *_: None)(ds, defaults["normals_percent"])
+                getattr(self.viewer3d, "set_normals_scale", lambda *_: None)(ds, defaults["normals_scale"])
+                # Aggiorna i controlli del pannello in base all'entry corrente
+                self.displayPanel.apply_properties(self.mct)
+            except Exception:
+                pass
+
+        finally:
+            try:
+                self.btnCancel.setEnabled(False)
+            except Exception:
+                pass
+            try:
+                if thread is not None:
+                    thread.quit()
+                    thread.wait(2000)
+            except Exception:
+                pass
+            self._normals_ctx = {}
+            self._active_job = None
+    
+    # --------- Normals: helpers ---------------------------------------------
+
+    def _current_ds_index(self) -> int | None:
+        """Return the current dataset index or None if nothing is selected."""
+        try:
+            ds = self._current_dataset_index()
+            return int(ds) if ds is not None else None
+        except Exception:
+            return None
+
+    def _ensure_normals_visible(self, ds: int) -> None:
+        """Ensure normals actor exists/visible for dataset ds before applying edits."""
+        v3d = self.viewer3d
+        # Prova API moderna
+        set_vis = getattr(v3d, "set_normals_visibility", None)
+        if callable(set_vis):
+            set_vis(ds, True)
+            # Sincronizza anche il toggle della toolbar se esiste
+            try:
+                self.act_toggle_normals.blockSignals(True)
+                self.act_toggle_normals.setChecked(True)
+                self.act_toggle_normals.blockSignals(False)
+            except Exception:
+                pass
+            return
+        # Fallback: prova a ricostruire direttamente
+        rb = getattr(v3d, "_rebuild_normals_actor", None)
+        if callable(rb):
+            rb(ds)
+        try:
+            # best effort: attivalo come “visibile” nello stato locale
+            rec = v3d._datasets[ds]
+            rec["normals_visible"] = True
+        except Exception:
+            pass
+
+    def _apply_normals_rebuild(self, ds: int) -> None:
+        """Chiama il rebuild con i parametri correnti del dataset."""
+        v3d = self.viewer3d
+        # Se la API granulari esistono, non serve forzare il rebuild manuale
+        rb = getattr(v3d, "_rebuild_normals_actor", None)
+        if callable(rb):
+            # Recupera parametri correnti (con fallback a default)
+            try:
+                rec = v3d._datasets[ds]
+                style = str(rec.get("normals_style", getattr(v3d, "_normals_style", "Uniform")))
+                color = tuple(rec.get("normals_color", getattr(v3d, "_normals_color", (1.0, 0.2, 0.2))))
+                percent = int(rec.get("normals_percent", getattr(v3d, "_normals_percent", 1)))
+                scale = int(rec.get("normals_scale", getattr(v3d, "_normals_scale", 20)))
+            except Exception:
+                style, color, percent, scale = "Uniform", (1.0, 0.2, 0.2), 50, 20
+            rb(ds, style=style, color=color, percent=percent, scale=scale)
+
+    # --------- Normals: handlers from DisplayPanel --------------------------
+
+    # ------------------------------
+    # Normals display live updates
+    # ------------------------------
+    # ----------------------- Normals: handlers ----------------------------
+    def _on_normals_style_changed(self, mode: str) -> None:
+        """
+        Change the visualization style of normals for the currently selected dataset.
+
+        Args:
+            mode (str): The style mode to apply. Options include:
+                - 'Uniform': Uniform color for all normals.
+                - 'Axis RGB': Color normals based on their axis orientation.
+                - 'RGB Components': Color normals based on their RGB components.
+        """
+        ds = self._current_dataset_index()
+        if ds is None:
+            return
+        # Update the internal MCT (Metadata Context Table) state if available
+        try:
+            if self.mct is not None:
+                self.mct["normals_style"] = mode
+        except Exception:
+            pass
+        # Attempt to use the viewer's public API; if unavailable, fallback to rebuilding
+        try:
+            fn = getattr(self.viewer3d, "set_normals_style", None)
+            if callable(fn):
+                fn(ds, mode)
+            else:
+                # Fallback: force a rebuild with the new parameters while maintaining current visibility
+                self._apply_normals_update(ds, style=mode)
+        except Exception:
+            pass
+
+    def _on_normals_color_changed(self, col: QtGui.QColor) -> None:
+        """
+        Change the uniform color of normals. This is only applicable if the style is set to 'Uniform'.
+
+        Args:
+            col (QtGui.QColor): The new color to apply.
+        """
+        if col is None or not col.isValid():
+            return
+        ds = self._current_dataset_index()
+        if ds is None:
+            return
+        rgb = (col.red(), col.green(), col.blue())
+        # Update the internal MCT state if available
+        try:
+            if self.mct is not None:
+                self.mct["normals_color"] = rgb
+        except Exception:
+            pass
+        # Attempt to use the viewer's public API; if unavailable, fallback to rebuilding
+        try:
+            fn = getattr(self.viewer3d, "set_normals_color", None)
+            if callable(fn):
+                fn(ds, *rgb)
+            else:
+                self._apply_normals_update(ds, color=rgb)
+        except Exception:
+            pass
+
+    def _on_normals_percent_changed(self, percent: int) -> None:
+        """
+        Change the percentage of normals displayed for the currently selected dataset.
+
+        Args:
+            percent (int): The percentage of normals to display (1 to 100).
+        """
+        ds = self._current_dataset_index()
+        if ds is None:
+            return
+        p = int(max(1, min(100, percent)))  # Clamp the value between 1 and 100
+        # Update the internal MCT state if available
+        try:
+            if self.mct is not None:
+                self.mct["normals_percent"] = p
+        except Exception:
+            pass
+        # Attempt to use the viewer's public API; if unavailable, fallback to rebuilding
+        try:
+            fn = getattr(self.viewer3d, "set_normals_percent", None)
+            if callable(fn):
+                fn(ds, p)
+            else:
+                self._apply_normals_update(ds, percent=p)
+        except Exception:
+            pass
+
+    def _on_normals_scale_changed(self, scale: int) -> None:
+        """
+        Change the scale (vector size) of normals for the currently selected dataset.
+
+        Args:
+            scale (int): The scale factor for normals. Valid range is 1 to 200.
+        """
+        ds = self._current_dataset_index()
+        if ds is None:
+            return
+        s = int(max(1, min(200, scale)))  # Clamp the value between 1 and 200
+        # Update the internal MCT state if available
+        try:
+            if self.mct is not None:
+                self.mct["normals_scale"] = s
+        except Exception:
+            pass
+        # Attempt to use the viewer's public API; if unavailable, fallback to rebuilding
+        try:
+            fn = getattr(self.viewer3d, "set_normals_scale", None)
+            if callable(fn):
+                fn(ds, s)
+            else:
+                self._apply_normals_update(ds, scale=s)
+        except Exception:
+            pass
+
+    # Helper: apply changes to normals by rebuilding the glyph actor if necessary
+    def _apply_normals_update(self, ds: int, *, style: str | None = None,
+                              color: tuple[int, int, int] | None = None,
+                              percent: int | None = None,
+                              scale: int | None = None) -> None:
+        """
+        Updates the normals parameters in the viewer's dataset record and forces the
+        reconstruction of the glyph actor while maintaining the current visibility state.
+
+        Args:
+            ds (int): The dataset index to update.
+            style (str | None): The visualization style for normals (e.g., 'Uniform', 'Axis RGB').
+            color (tuple[int, int, int] | None): The RGB color for normals, as integers in the range 0-255.
+            percent (int | None): The percentage of normals to display (1 to 100).
+            scale (int | None): The scale factor for normals (1 to 200).
+        """
+        try:
+            recs = getattr(self.viewer3d, "_datasets", [])
+            if not (0 <= ds < len(recs)):
+                return
+            rec = recs[ds]
+            # Update per-dataset state
+            if style is not None:
+                rec["normals_style"] = style
+            if color is not None:
+                # Normalize color to float 0..1 if the viewer expects it, otherwise keep 0..255
+                try:
+                    rec["normals_color"] = tuple(float(c)/255.0 for c in color)
+                except Exception:
+                    rec["normals_color"] = color
+            if percent is not None:
+                rec["normals_percent"] = int(max(1, min(100, percent)))
+            if scale is not None:
+                rec["normals_scale"] = int(max(1, min(200, scale)))
+
+            # If normals are currently visible, rebuild the actor; otherwise, do nothing
+            # (the actor will be rebuilt when toggled ON).
+            visible = bool(rec.get("normals_visible", False))
+            if visible:
+                # Prefer public API if it exists
+                rb = getattr(self.viewer3d, "_rebuild_normals_actor", None)
+                if callable(rb):
+                    rb(
+                        ds,
+                        style=str(rec.get("normals_style", "Axis RGB")),
+                        color=tuple(rec.get("normals_color", (0.9, 0.9, 0.2))),
+                        percent=int(rec.get("normals_percent", 5)),
+                        scale=int(rec.get("normals_scale", 20)),
+                    )
+                else:
+                    # As a fallback, force set_normals_visibility(True), which internally triggers a rebuild
+                    getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, True)
+            # Perform a lightweight refresh of the viewer
+            try:
+                self.viewer3d.refresh()
+            except Exception:
+                pass
+        except Exception:
+            pass
+    
+
+    def _on_fast_normals_toggled(self, enabled: bool) -> None:
+        """
+        Persist the user's preference for 'Fast normals' in the window state.
+
+        Args:
+            enabled (bool): Whether the 'Fast normals' mode is enabled or not.
+        """
+        try:
+            self.normals_fast_enabled = bool(enabled)
+        except Exception:
+            pass

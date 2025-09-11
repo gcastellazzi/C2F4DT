@@ -9,6 +9,7 @@ vtk>=9.3
 # Core scientific stack
 numpy>=1.24
 psutil>=5.9
+scipy>=1.11
 
 # Documentation
 mkdocs>=1.6
@@ -20,3 +21,6 @@ PyYAML>=6.0
 # Code style / linting
 black>=24.3
 isort>=5.13
+
+# Icons
+pillow>=10.0

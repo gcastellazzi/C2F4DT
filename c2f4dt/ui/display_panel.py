@@ -12,6 +12,13 @@ class DisplayPanel(QtWidgets.QWidget):
         sigColormapChanged: Emitted when colormap changes.
         sigMeshRepresentationChanged: Emitted when mesh representation changes.
         sigMeshOpacityChanged: Emitted when mesh opacity changes.
+
+        # Normals (compute) signals
+        sigComputeNormals: Emitted when compute normals is requested.
+        sigFastNormalsChanged: Emitted when fast normals checkbox changes.
+        sigNormalsStyleChanged: Emitted when normals display style changes.
+        sigNormalsColorChanged: Emitted when normals uniform color changes.
+        sigNormalsPercentChanged/sigNormalsScaleChanged: Emitted when fraction/scale of shown normals changes.
     """
 
     # Signals
@@ -23,6 +30,16 @@ class DisplayPanel(QtWidgets.QWidget):
     sigMeshRepresentationChanged = QtCore.Signal(str)
     sigMeshOpacityChanged = QtCore.Signal(int)
 
+    # Normals (display) signals
+    sigNormalsStyleChanged = QtCore.Signal(str)       # 'Uniform' | 'Axis RGB' | 'RGB Components'
+    sigNormalsColorChanged = QtCore.Signal(QtGui.QColor)
+    sigNormalsPercentChanged = QtCore.Signal(int)     # 1..100
+    sigNormalsScaleChanged = QtCore.Signal(int)       # 1..200
+
+    # Normals (compute) signals
+    sigComputeNormals = QtCore.Signal()
+    sigFastNormalsChanged = QtCore.Signal(bool)
+
     def __init__(self, parent=None) -> None:
         """Initialize the panel with controls."""
         super().__init__(parent)
@@ -30,6 +47,10 @@ class DisplayPanel(QtWidgets.QWidget):
         form.setLabelAlignment(QtCore.Qt.AlignRight)
         form.setFormAlignment(QtCore.Qt.AlignTop)
         self.form = form
+
+        # Points visualization group box
+        pointsGroupBox = QtWidgets.QGroupBox("Points Visualization")
+        pointsLayout = QtWidgets.QFormLayout(pointsGroupBox)
 
         # Point size
         self.sldSize = QtWidgets.QSlider(QtCore.Qt.Horizontal)
@@ -45,7 +66,7 @@ class DisplayPanel(QtWidgets.QWidget):
         sizeRow.addWidget(self.sldSize, 1)
         sizeRow.addWidget(self.spinSize)
         self.rowSize = _wrap(sizeRow)
-        form.addRow("Point size", self.rowSize)
+        pointsLayout.addRow("Point size", self.rowSize)
 
         # Point budget (%)
         self.sldBudget = QtWidgets.QSlider(QtCore.Qt.Horizontal)
@@ -61,14 +82,14 @@ class DisplayPanel(QtWidgets.QWidget):
         budRow.addWidget(self.sldBudget, 1)
         budRow.addWidget(self.spinBudget)
         self.rowBudget = _wrap(budRow)
-        form.addRow("% points shown", self.rowBudget)
+        pointsLayout.addRow("% points shown", self.rowBudget)
 
         # Color mode
         self.cmbColorMode = QtWidgets.QComboBox()
         self.cmbColorMode.addItems(["Solid", "Normal RGB", "Normal Colormap"])
         self.cmbColorMode.currentTextChanged.connect(self._on_mode_changed)
         self.rowColorMode = self.cmbColorMode
-        form.addRow("Color mode", self.rowColorMode)
+        pointsLayout.addRow("Color mode", self.rowColorMode)
 
         # Solid color
         self.btnColor = QtWidgets.QPushButton("Choose…")
@@ -86,14 +107,20 @@ class DisplayPanel(QtWidgets.QWidget):
         colorRow.addWidget(self.colorPreview)
 
         self.rowSolid = _wrap(colorRow)
-        form.addRow("Solid color", self.rowSolid)
+        pointsLayout.addRow("Solid color", self.rowSolid)
 
         # Colormap
         self.cmbCmap = QtWidgets.QComboBox()
         self.cmbCmap.addItems(["viridis", "magma", "plasma", "cividis"])
         self.cmbCmap.currentTextChanged.connect(self.sigColormapChanged)
         self.rowCmap = self.cmbCmap
-        form.addRow("Colormap", self.rowCmap)
+        pointsLayout.addRow("Colormap", self.rowCmap)
+
+        # Add the group box to the main form layout
+        form.addRow(pointsGroupBox)
+
+        # --- Normals visualization controls ---
+        self._build_normals_section(form)
 
         # Mesh representation
         self.cmbMeshRep = QtWidgets.QComboBox()
@@ -140,6 +167,8 @@ class DisplayPanel(QtWidgets.QWidget):
         self._set_row_visible(self.rowColorMode, self._kind == "points")
         self._set_row_visible(self.rowMeshRep, self._kind == "mesh")
         self._set_row_visible(self.rowOpacity, self._kind == "mesh")
+        # Normals display (show for points by default; adjust if you also support mesh normals)
+        self._set_row_visible(self.rowNormals, self._kind == "points")
 
     def _pick_color(self) -> None:
         """Open color dialog and emit chosen color."""
@@ -174,6 +203,13 @@ class DisplayPanel(QtWidgets.QWidget):
         if lbl is not None:
             lbl.setVisible(visible)
 
+    def fast_normals_enabled(self) -> bool:
+        """Return True if 'Fast normals' is currently enabled."""
+        try:
+            return bool(self.chkFastNormals.isChecked())
+        except Exception:
+            return True
+
     def set_mode(self, kind: str) -> None:
         """Imposta il tipo di dataset (points|mesh).
         Set the dataset type (points|mesh)."""
@@ -200,10 +236,113 @@ class DisplayPanel(QtWidgets.QWidget):
                 # pal.setColor(QtGui.QPalette.Button, c)
                 # self.btnColor.setPalette(pal)
                 self.btnColor.setAutoFillBackground(True)
+            # Normals visualization (optional fields)
+            style = props.get("normals_style")
+            if style in ("Uniform", "Axis RGB", "RGB Components"):
+                self.comboNormalsStyle.blockSignals(True)
+                self.comboNormalsStyle.setCurrentText(style)
+                self.comboNormalsStyle.blockSignals(False)
+            if "normals_percent" in props:
+                self.spinNormalsPercent.blockSignals(True)
+                self.spinNormalsPercent.setValue(int(props["normals_percent"]))
+                self.spinNormalsPercent.blockSignals(False)
+            if "normals_scale" in props:
+                self.sliderNormalsScale.blockSignals(True)
+                self.sliderNormalsScale.setValue(int(props["normals_scale"]))
+                self.sliderNormalsScale.blockSignals(False)
         else:
             self.cmbMeshRep.setCurrentText(props.get("representation", "Surface").capitalize())
             self.sldOpacity.setValue(int(props.get("opacity", 100)))
         self.set_mode(kind)
+
+    # ------------------------------------------------------------------
+    # Normals display UI
+    # ------------------------------------------------------------------
+    def _build_normals_section(self, form: QtWidgets.QFormLayout) -> None:
+        """Build UI controls for normals visualization.
+        
+        Controls:
+          * Style: Uniform | Axis RGB | RGB Components
+          * Color button (enabled only for Uniform)
+          * Percent shown: 1..100 %
+          * Vector size (scale): 1..200
+        """
+
+        normalsGroupBox = QtWidgets.QGroupBox("Normals Visualization")
+        normalsLayout = QtWidgets.QVBoxLayout(normalsGroupBox)
+
+        bar_plugin = QtWidgets.QHBoxLayout()
+        self.btnComputeNormals = QtWidgets.QPushButton("Compute normals…")
+        self.btnComputeNormals.setObjectName("btnComputeNormals")
+        self.chkFastNormals = QtWidgets.QCheckBox("Fast normals")
+        self.chkFastNormals.setObjectName("chkFastNormals")
+        self.chkFastNormals.setChecked(True)
+        bar_plugin.addWidget(self.btnComputeNormals)
+        bar_plugin.addWidget(self.chkFastNormals)
+        normalsLayout.addLayout(bar_plugin)
+        # Emit high-level signals for the host window
+        self.btnComputeNormals.clicked.connect(self.sigComputeNormals.emit)
+        self.chkFastNormals.toggled.connect(self.sigFastNormalsChanged)
+
+        row1 = QtWidgets.QHBoxLayout()
+
+        # Style combo
+        self.comboNormalsStyle = QtWidgets.QComboBox()
+        self.comboNormalsStyle.setObjectName("comboNormalsStyle")
+        self.comboNormalsStyle.addItems(["Uniform", "Axis RGB", "RGB Components"])  # 3 modes
+        self.comboNormalsStyle.currentTextChanged.connect(self.sigNormalsStyleChanged.emit)
+        row1.addWidget(self.comboNormalsStyle, 1)
+
+        # Color button (only for Uniform)
+        self.btnNormalsColor = QtWidgets.QPushButton("Color…")
+        self.btnNormalsColor.setObjectName("btnNormalsColor")
+        self.btnNormalsColor.clicked.connect(self._on_pick_normals_color)
+        row1.addWidget(self.btnNormalsColor)
+
+        self.rowNormalsStyle = _wrap(row1)
+        normalsLayout.addWidget(self.rowNormalsStyle)
+
+        row2 = QtWidgets.QHBoxLayout()
+        # Percent of normals to show
+        self.spinNormalsPercent = QtWidgets.QSpinBox()
+        self.spinNormalsPercent.setRange(1, 100)
+        self.spinNormalsPercent.setValue(1)
+        self.spinNormalsPercent.setSuffix(" %")
+        self.spinNormalsPercent.valueChanged.connect(self.sigNormalsPercentChanged.emit)
+        row2.addWidget(QtWidgets.QLabel("Shown:"))
+        row2.addWidget(self.spinNormalsPercent)
+
+        # Vector size (glyph scale)
+        self.sliderNormalsScale = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.sliderNormalsScale.setRange(1, 200)
+        self.sliderNormalsScale.setValue(20)
+        self.sliderNormalsScale.setObjectName("sliderNormalsScale")
+        self.sliderNormalsScale.valueChanged.connect(self.sigNormalsScaleChanged.emit)
+        row2.addWidget(QtWidgets.QLabel("Size:"))
+        row2.addWidget(self.sliderNormalsScale, 2)
+
+        self.rowNormals = _wrap(row2)
+        normalsLayout.addWidget(self.rowNormals)
+
+        # Enable state for color button (only Uniform)
+        self._update_normals_color_enabled(self.comboNormalsStyle.currentText())
+        self.comboNormalsStyle.currentTextChanged.connect(self._update_normals_color_enabled)
+
+        form.addRow(normalsGroupBox)
+
+    def _on_pick_normals_color(self) -> None:
+        """Open a color dialog and emit chosen uniform color for normals."""
+        col = QtWidgets.QColorDialog.getColor(parent=self, title="Normals color")
+        if col.isValid():
+            self.sigNormalsColorChanged.emit(col)
+
+    def _update_normals_color_enabled(self, mode: str) -> None:
+        """Enable/disable the normals color button based on the selected style."""
+        enable = (mode == "Uniform")
+        try:
+            self.btnNormalsColor.setEnabled(enable)
+        except Exception:
+            pass
 
 
 def _wrap(layout: QtWidgets.QLayout) -> QtWidgets.QWidget:

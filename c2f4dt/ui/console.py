@@ -225,20 +225,6 @@ class ConsoleWidget(QtWidgets.QPlainTextEdit):
     
         super().keyPressEvent(event)
 
-    # def _apply_completion(self, text: str) -> None:
-    #     """Apply a completion from the popup to the current token."""
-    #     buf = self._current_input_text()
-    #     if not buf:
-    #         return
-    #     # Replace last whitespace-separated token
-    #     parts = buf.rsplit(None, 1)
-    #     if len(parts) == 1:
-    #         prefix = ""
-    #         token = parts[0]
-    #     else:
-    #         prefix, token = parts[0] + " ", parts[1]
-    #     completed = prefix + text
-    #     self._set_current_input_text(completed)
 
     # ------------------------ Autocomplete helpers ------------------------
     def _current_line_text(self) -> str:

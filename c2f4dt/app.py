@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtWidgets, QtGui
 
 from .main_window import MainWindow
 
@@ -12,7 +12,7 @@ if os.environ.get("C2F4DT_SOFTWARE_OPENGL", "0") == "1":
         QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseSoftwareOpenGL, True)
     except Exception:
         pass
-    
+
 def main() -> None:
     """Application entry-point.
 
@@ -22,6 +22,11 @@ def main() -> None:
     app.setApplicationName("C2F4DT")
     app.setOrganizationName("C2F4DT")
     app.setApplicationVersion("1.0")
+
+    # Imposta l'icona dell'applicazione (Cmd+Tab su macOS, Alt+Tab su Windows)
+    icon_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "icons", "C2F4DT.icns")
+    if os.path.isfile(icon_path):
+        app.setWindowIcon(QtGui.QIcon(icon_path))
 
     # High-DPI friendly defaults
     if hasattr(QtCore.Qt, "AA_UseHighDpiPixmaps"):

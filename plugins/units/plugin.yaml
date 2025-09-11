@@ -1,0 +1,6 @@
+name: units
+version: '0.1.0'
+description: Simple units conversion plugin for C2F4DT
+order: 1
+requires: [numpy, pyvista]
+entry_point: "plugin:register"

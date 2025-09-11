@@ -1,0 +1,10 @@
+# Nome cartella = "example_display_button"
+# Questo file dice al PluginManager come caricare il plugin.
+name: example_display_button
+version: '0.1.0'
+description: Minimal plugin that injects a button into scrollDISPLAY with rich comments.
+order: 10
+requires: [PySide6]   # opzionale; se vuoi lascia pure vuoto []
+# Indichiamo "plugin:register" => modulo "plugin.py", funzione "register"
+# Il tuo PluginManager risolve sia modulo relativo (plugin) sia funzione (register)
+entry_point: "plugin:register"
