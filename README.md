@@ -6,27 +6,27 @@ See `docs/` for the full specification and run instructions below.
 
 To get started with the Cloud2FEM for Digital Twins framework, follow these steps:
 
-# Step 1: Create a virtual environment to isolate dependencies
+- Step 1: Create a virtual environment to isolate dependencies
 ```bash
 python -m venv .venv_c2f4dt
 ```
 
-# Step 2: Activate the virtual environment (On Windows, use: .venv_c2f4dt\Scripts\activate)
+- Step 2: Activate the virtual environment (On Windows, use: .venv_c2f4dt\Scripts\activate)
 ```bash
 source .venv_c2f4dt/bin/activate  
 ```
 
-# Step 3: Install the required dependencies from the requirements file
+- Step 3: Install the required dependencies from the requirements file
 ```bash
 pip install -r requirements.txt
 ```
 
-# Step 4: Install the current package in editable mode for development purposes
+- Step 4: Install the current package in editable mode for development purposes
 ```bash
 pip install -e .
 ```
 
-# Step 5: Run the main script to start the application
+- Step 5: Run the main script to start the application
 ```bash
 python main.py
 ```
