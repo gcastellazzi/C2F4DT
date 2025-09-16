@@ -1,14 +1,26 @@
 # C2F4DT – Release 1.0
 
-Cloud2FEM for Digital Twins — initial scaffold.
+Cloud2FEM for Digital Twins — initial scaffold.  
 See `docs/` for the full specification and run instructions below.
 
 ## Quick start
 ```bash
-python -m venv .venv
-source .venv_c2f4dt/bin/activate  # Windows: .venv\Scripts\activate
+# Create a virtual environment to isolate dependencies
+python -m venv .venv_c2f4dt
+
+# Activate the virtual environment
+# On Windows, use: .venv_c2f4dt\Scripts\activate
+source .venv_c2f4dt/bin/activate  
+
+# Install the required dependencies from the requirements file
 pip install -r requirements.txt
+
+# Install the current package in editable mode for development purposes
+pip install -e .
+
+# Run the main script to start the application
 python main.py
+```
 ```
 
 ## Documentation
