@@ -1,2 +1,28 @@
 # API Index
 
+> Auto-generated index of API modules.
+
+- [c2f4dt](c2f4dt.md)
+- [c2f4dt.app](c2f4dt/app.md)
+- [c2f4dt.main_window](c2f4dt/main_window.md)
+- [c2f4dt.plugins](c2f4dt/plugins.md)
+- [c2f4dt.plugins.example_display_button](c2f4dt/plugins/example_display_button.md)
+- [c2f4dt.plugins.example_display_button.plugin](c2f4dt/plugins/example_display_button/plugin.md)
+- [c2f4dt.plugins.manager](c2f4dt/plugins/manager.md)
+- [c2f4dt.plugins.transform_rt](c2f4dt/plugins/transform_rt.md)
+- [c2f4dt.plugins.transform_rt.plugin](c2f4dt/plugins/transform_rt/plugin.md)
+- [c2f4dt.plugins.units](c2f4dt/plugins/units.md)
+- [c2f4dt.plugins.units.plugin](c2f4dt/plugins/units/plugin.md)
+- [c2f4dt.plugins.vtk_import](c2f4dt/plugins/vtk_import.md)
+- [c2f4dt.plugins.vtk_import.plugin](c2f4dt/plugins/vtk_import/plugin.md)
+- [c2f4dt.ui](c2f4dt/ui.md)
+- [c2f4dt.ui.console](c2f4dt/ui/console.md)
+- [c2f4dt.ui.display_panel](c2f4dt/ui/display_panel.md)
+- [c2f4dt.ui.import_summary_dialog](c2f4dt/ui/import_summary_dialog.md)
+- [c2f4dt.ui.viewer3d](c2f4dt/ui/viewer3d.md)
+- [c2f4dt.utils](c2f4dt/utils.md)
+- [c2f4dt.utils.icons](c2f4dt/utils/icons.md)
+- [c2f4dt.utils.io](c2f4dt/utils/io.md)
+- [c2f4dt.utils.io.importers](c2f4dt/utils/io/importers.md)
+- [c2f4dt.utils.systeminfo](c2f4dt/utils/systeminfo.md)
+- [c2f4dt.utils.theme](c2f4dt/utils/theme.md)

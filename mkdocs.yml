@@ -1,4 +1,6 @@
-site_name: Cloud2FEMi
+site_name: C2F4DT
+site_description: Cloud2FEM for Digital Twins tools
+site_author: Giovanni Castellazzi
 repo_url: https://github.com/gcastellazzi/C2F4DT
 theme:
   name: material
@@ -15,6 +17,8 @@ markdown_extensions:
 - admonition
 - tables
 - toc
+- attr_list
+- def_list
 - pymdownx.highlight:
     anchor_linenums: true
     linenums: true
@@ -25,6 +29,21 @@ markdown_extensions:
     permalink: true
 plugins:
 - search
+- mkdocstrings:
+    default_handler: python
+    handlers:
+      python:
+        paths:
+        - src
+        options:
+          docstring_style: google
+          show_root_heading: true
+          show_if_no_docstring: true
+          show_source: true
+          filters:
+          - '!^_'
+watch:
+- src
 nav:
 - Home: index.md
 - Guide:
@@ -37,68 +56,28 @@ nav:
   - Theory: guide/theory.md
   - Plugins Developer Guide: guide/plugins_developer_guide.md
 - API Reference:
-  - cloud2fem.app: api/cloud2fem.app.md
-  - index: api/index.md
-  - Api:
-    - cloud2fem.plugins.api: api/cloud2fem.plugins.api.md
-  - Console_Widget:
-    - cloud2fem.ui.console_widget: api/cloud2fem.ui.console_widget.md
-  - Contours:
-    - cloud2fem.ops.contours: api/cloud2fem.ops.contours.md
-  - Contours_Pipeline:
-    - cloud2fem.ops.contours_pipeline: api/cloud2fem.ops.contours_pipeline.md
-  - Contours_Utility:
-    - cloud2fem.ops.contours_utility: api/cloud2fem.ops.contours_utility.md
-  - Dialogs:
-    - cloud2fem.ui.dialogs.grid_dialog: api/cloud2fem.ui.dialogs.grid_dialog.md
-  - Geometry:
-    - cloud2fem.ops.geometry: api/cloud2fem.ops.geometry.md
-  - Grid_Model:
-    - cloud2fem.grid.grid_model: api/cloud2fem.grid.grid_model.md
-  - Legacy:
-    - cloud2fem.ops.legacy.slices_ex: api/cloud2fem.ops.legacy.slices_ex.md
-  - Logging:
-    - cloud2fem.utils.logging: api/cloud2fem.utils.logging.md
-  - Main_Window:
-    - cloud2fem.ui.main_window: api/cloud2fem.ui.main_window.md
-  - Manager:
-    - cloud2fem.plugins.manager: api/cloud2fem.plugins.manager.md
-  - Mct_Model:
-    - cloud2fem.model.mct_model: api/cloud2fem.model.mct_model.md
-  - Metrics:
-    - cloud2fem.utils.metrics: api/cloud2fem.utils.metrics.md
-  - Normalcalc:
-    - cloud2fem.native.normalcalc.rand_generation: api/cloud2fem.native.normalcalc.rand_generation.md
-  - Normals:
-    - cloud2fem.ops.normals: api/cloud2fem.ops.normals.md
-    - cloud2fem.tools.normals.runner: api/cloud2fem.tools.normals.runner.md
-  - Overlays:
-    - cloud2fem.viz.overlays: api/cloud2fem.viz.overlays.md
-  - Pcl:
-    - cloud2fem.io.pcl: api/cloud2fem.io.pcl.md
-  - Programmatic_Ui_Demo:
-    - cloud2fem.ui.programmatic_ui_demo: api/cloud2fem.ui.programmatic_ui_demo.md
-  - Qt_Paths:
-    - cloud2fem.ui.qt_paths: api/cloud2fem.ui.qt_paths.md
-  - Replay_Logger:
-    - cloud2fem.utils.replay_logger: api/cloud2fem.utils.replay_logger.md
-  - Resources:
-    - cloud2fem.ui.resources.resources_rc: api/cloud2fem.ui.resources.resources_rc.md
-  - Slice_Options:
-    - cloud2fem.ops.slice_options: api/cloud2fem.ops.slice_options.md
-  - Slices:
-    - cloud2fem.ops.slices: api/cloud2fem.ops.slices.md
-  - Slices_Options_Dialog:
-    - cloud2fem.ui.slices_options_dialog: api/cloud2fem.ui.slices_options_dialog.md
-  - Traceflow:
-    - cloud2fem.utils.traceflow: api/cloud2fem.utils.traceflow.md
-  - Types:
-    - cloud2fem.model.types: api/cloud2fem.model.types.md
-  - Utils:
-    - cloud2fem.ui.utils.helpers: api/cloud2fem.ui.utils.helpers.md
-  - Viewers:
-    - cloud2fem.ui.viewers.pyvista_backend: api/cloud2fem.ui.viewers.pyvista_backend.md
-    - cloud2fem.ui.viewers.viewer: api/cloud2fem.ui.viewers.viewer.md
-  - Widgets:
-    - cloud2fem.ui.widgets.embed: api/cloud2fem.ui.widgets.embed.md
-    - cloud2fem.ui.widgets.slices2d_window: api/cloud2fem.ui.widgets.slices2d_window.md
+  - Index: api/index.md
+  - c2f4dt: api/c2f4dt.md
+  - c2f4dt.app: api/c2f4dt/app.md
+  - c2f4dt.main_window: api/c2f4dt/main_window.md
+  - c2f4dt.plugins: api/c2f4dt/plugins.md
+  - c2f4dt.plugins.example_display_button: api/c2f4dt/plugins/example_display_button.md
+  - c2f4dt.plugins.example_display_button.plugin: api/c2f4dt/plugins/example_display_button/plugin.md
+  - c2f4dt.plugins.manager: api/c2f4dt/plugins/manager.md
+  - c2f4dt.plugins.transform_rt: api/c2f4dt/plugins/transform_rt.md
+  - c2f4dt.plugins.transform_rt.plugin: api/c2f4dt/plugins/transform_rt/plugin.md
+  - c2f4dt.plugins.units: api/c2f4dt/plugins/units.md
+  - c2f4dt.plugins.units.plugin: api/c2f4dt/plugins/units/plugin.md
+  - c2f4dt.plugins.vtk_import: api/c2f4dt/plugins/vtk_import.md
+  - c2f4dt.plugins.vtk_import.plugin: api/c2f4dt/plugins/vtk_import/plugin.md
+  - c2f4dt.ui: api/c2f4dt/ui.md
+  - c2f4dt.ui.console: api/c2f4dt/ui/console.md
+  - c2f4dt.ui.display_panel: api/c2f4dt/ui/display_panel.md
+  - c2f4dt.ui.import_summary_dialog: api/c2f4dt/ui/import_summary_dialog.md
+  - c2f4dt.ui.viewer3d: api/c2f4dt/ui/viewer3d.md
+  - c2f4dt.utils: api/c2f4dt/utils.md
+  - c2f4dt.utils.icons: api/c2f4dt/utils/icons.md
+  - c2f4dt.utils.io: api/c2f4dt/utils/io.md
+  - c2f4dt.utils.io.importers: api/c2f4dt/utils/io/importers.md
+  - c2f4dt.utils.systeminfo: api/c2f4dt/utils/systeminfo.md
+  - c2f4dt.utils.theme: api/c2f4dt/utils/theme.md

@@ -7,7 +7,7 @@
 - **Git**: Either [Git](https://git-scm.com/) (command line) or [GitHub Desktop](https://desktop.github.com/).
 
 ## Creating a Virtual Environment in VS Code
-1. Open the Cloud2FEMi folder in VS Code.
+1. Open the C2F4DT folder in VS Code.
 2. Open the terminal (`Ctrl+``).
 3. Create a virtual environment:
    ```bash
@@ -40,7 +40,7 @@ pip install -e .[dev]
 ## Running the Application
 - To launch the main app:
   ```bash
-  python -m cloud2fem
+  python main.py
   ```
 - Or run example scripts:
   ```bash
@@ -53,8 +53,8 @@ pip install -e .[dev]
 
 ## Cloning the Repository
 ```bash
-git clone https://github.com/gcastellazzi/Cloud2FEMi.git
-cd Cloud2FEMi
+git clone https://github.com/gcastellazzi/C2F4DT.git
+cd C2F4DT
 ```
 
 If using GitHub Desktop, choose “Clone repository” and paste the repo URL.

@@ -1,0 +1,378 @@
+
+
+
+
+<!DOCTYPE html>
+<html class="gl-system ui-neutral with-top-bar with-header " lang="en">
+<head prefix="og: http://ogp.me/ns#">
+<meta charset="utf-8">
+<meta content="IE=edge" http-equiv="X-UA-Compatible">
+<meta content="width=device-width, initial-scale=1" name="viewport">
+<title>Testing/Data/bunny.ply.sha512 · master · VTK / VTK · GitLab</title>
+<script>
+//<![CDATA[
+window.gon={};gon.math_rendering_limits_enabled=true;gon.features={"inlineBlame":false,"directoryCodeDropdownUpdates":true,"repositoryFileTreeBrowser":false};
+//]]>
+</script>
+
+<script>
+//<![CDATA[
+const root = document.documentElement;
+if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  root.classList.add('gl-dark');
+}
+
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  if (e.matches) {
+    root.classList.add('gl-dark');
+  } else {
+    root.classList.remove('gl-dark');
+  }
+});
+
+//]]>
+</script>
+<script>
+//<![CDATA[
+var gl = window.gl || {};
+gl.startup_calls = null;
+gl.startup_graphql_calls = [{"query":"query getBlobInfo(\n  $projectPath: ID!\n  $filePath: [String!]!\n  $ref: String!\n  $refType: RefType\n  $shouldFetchRawText: Boolean!\n) {\n  project(fullPath: $projectPath) {\n    __typename\n    id\n    repository {\n      __typename\n      empty\n      blobs(paths: $filePath, ref: $ref, refType: $refType) {\n        __typename\n        nodes {\n          __typename\n          id\n          webPath\n          name\n          size\n          rawSize\n          rawTextBlob @include(if: $shouldFetchRawText)\n          fileType\n          language\n          path\n          blamePath\n          editBlobPath\n          gitpodBlobUrl\n          ideEditPath\n          forkAndEditPath\n          ideForkAndEditPath\n          codeNavigationPath\n          projectBlobPathRoot\n          forkAndViewPath\n          environmentFormattedExternalUrl\n          environmentExternalUrlForRouteMap\n          canModifyBlob\n          canModifyBlobWithWebIde\n          canCurrentUserPushToBranch\n          archived\n          storedExternally\n          externalStorage\n          externalStorageUrl\n          rawPath\n          replacePath\n          pipelineEditorPath\n          simpleViewer {\n            fileType\n            tooLarge\n            type\n            renderError\n          }\n          richViewer {\n            fileType\n            tooLarge\n            type\n            renderError\n          }\n        }\n      }\n    }\n  }\n}\n","variables":{"projectPath":"vtk/vtk","ref":"master","refType":null,"filePath":"Testing/Data/bunny.ply.sha512","shouldFetchRawText":true}}];
+
+if (gl.startup_calls && window.fetch) {
+  Object.keys(gl.startup_calls).forEach(apiCall => {
+   gl.startup_calls[apiCall] = {
+      fetchCall: fetch(apiCall, {
+        // Emulate XHR for Rails AJAX request checks
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        // fetch won’t send cookies in older browsers, unless you set the credentials init option.
+        // We set to `same-origin` which is default value in modern browsers.
+        // See https://github.com/whatwg/fetch/pull/585 for more information.
+        credentials: 'same-origin'
+      })
+    };
+  });
+}
+if (gl.startup_graphql_calls && window.fetch) {
+  const headers = {"X-CSRF-Token":"fvlDb6-kc5dYxWmv-spMk60KgI6PEAVz4d5CrMFUdJ7AZgJ-GTJErP8f_38xEW6ZgyFUd94Ke9R1KvrclxJ_Bw","x-gitlab-feature-category":"source_code_management"};
+  const url = `https://gitlab.kitware.com/api/graphql`
+
+  const opts = {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
+    }
+  };
+
+  gl.startup_graphql_calls = gl.startup_graphql_calls.map(call => ({
+    ...call,
+    fetchCall: fetch(url, {
+      ...opts,
+      credentials: 'same-origin',
+      body: JSON.stringify(call)
+    })
+  }))
+}
+
+
+//]]>
+</script>
+
+<link rel="prefetch" href="/assets/webpack/monaco.2f50fc5f.chunk.js">
+
+<meta content="light dark" name="color-scheme">
+<link rel="stylesheet" href="/assets/application-3bef5440e16f35e60e5e34f859808b978819390770003d7cc606ec9b5bc19ec4.css" media="(prefers-color-scheme: light)" />
+<link rel="stylesheet" href="/assets/application_dark-fe5b1b7087a0875ec3809c7e701e092a8b860dfeb08079cae90463bf91d4aec5.css" media="(prefers-color-scheme: dark)" />
+<link rel="stylesheet" href="/assets/page_bundles/tree-2531e1afd5c7b65f2bcddd065af7305d53208056949e5d42c8fd1081eb1333aa.css" /><link rel="stylesheet" href="/assets/page_bundles/projects-16edafda8e98e20efce434e9cfbdade2d3a8fe5985cde756e285ae83598314d7.css" /><link rel="stylesheet" href="/assets/page_bundles/commit_description-1e2cba4dda3c7b30dd84924809020c569f1308dea51520fe1dd5d4ce31403195.css" /><link rel="stylesheet" href="/assets/page_bundles/work_items-730d51301059546b46c92dcc0eb3808821a2903828dbbbd48f1bf0cd9b93caec.css" /><link rel="stylesheet" href="/assets/page_bundles/notes_shared-411ac0a755d0cba92f17ea578c4d97cc8fa73a872c9f9b77328fbaba48ce3ba6.css" />
+<link rel="stylesheet" href="/assets/application_utilities-f77f86f78d4146d4c2c821bc481cee77b897df284886ad189d8dcb1234cb9651.css" media="(prefers-color-scheme: light)" />
+<link rel="stylesheet" href="/assets/application_utilities_dark-f77f86f78d4146d4c2c821bc481cee77b897df284886ad189d8dcb1234cb9651.css" media="(prefers-color-scheme: dark)" />
+<link rel="stylesheet" href="/assets/tailwind-93a6e3b32a3276c6a63a93ac9d60c878adc33b8161fe7c9ad56663c83db92ae3.css" />
+
+
+<link rel="stylesheet" href="/assets/fonts-fae5d3f79948bd85f18b6513a025f863b19636e85b09a1492907eb4b1bb0557b.css" />
+<link rel="stylesheet" href="/assets/highlight/themes/white-8fe3933b046776818759e684f787d451d645d7517b7f6e4addc17aed98595997.css" media="(prefers-color-scheme: light)" />
+<link rel="stylesheet" href="/assets/highlight/themes/dark-de44bcd749657b6c80de61f53cc5a9d8249bfa3c413c5268507c0616da310479.css" media="(prefers-color-scheme: dark)" />
+
+<script src="/assets/webpack/runtime.497ed3ef.bundle.js" defer="defer"></script>
+<script src="/assets/webpack/main.554ba4ee.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/tracker.4ac2efa2.chunk.js" defer="defer"></script>
+<script>
+//<![CDATA[
+window.snowplowOptions = {"namespace":"gl","hostname":"gitlab.kitware.com:443","postPath":"/-/collect_events","forceSecureTracker":true,"appId":"gitlab_sm"}
+
+gl = window.gl || {};
+gl.snowplowStandardContext = {"schema":"iglu:com.gitlab/gitlab_standard/jsonschema/1-1-7","data":{"environment":"self-managed","source":"gitlab-rails","correlation_id":"01K4Z3JF9STDV3RBM6VR8DCDYH","plan":"free","extra":{},"user_id":null,"global_user_id":null,"user_type":null,"is_gitlab_team_member":null,"namespace_id":16,"ultimate_parent_namespace_id":16,"project_id":13,"feature_enabled_by_namespace_ids":null,"realm":"self-managed","instance_id":"5ea29413-2a78-4a7b-9734-0e67b6b06da9","unique_instance_id":"ef356084-f7d0-5071-8fc8-c4cf7337fbc4","host_name":"gitlab.kitware.com","instance_version":"18.3.1","context_generated_at":"2025-09-12T09:59:22.882-04:00"}}
+gl.snowplowPseudonymizedPageUrl = "https://gitlab.kitware.com/namespace16/project13/-/blob/:repository_path";
+gl.maskedDefaultReferrerUrl = null;
+gl.ga4MeasurementId = 'G-ENFH3X7M5Y';
+gl.duoEvents = [];
+gl.onlySendDuoEvents = false;
+
+
+//]]>
+</script>
+<link rel="preload" href="/assets/application_utilities-f77f86f78d4146d4c2c821bc481cee77b897df284886ad189d8dcb1234cb9651.css" as="style" type="text/css">
+<link rel="preload" href="/assets/application-3bef5440e16f35e60e5e34f859808b978819390770003d7cc606ec9b5bc19ec4.css" as="style" type="text/css">
+<link rel="preload" href="/assets/highlight/themes/white-8fe3933b046776818759e684f787d451d645d7517b7f6e4addc17aed98595997.css" as="style" type="text/css">
+
+
+
+
+<script src="/assets/webpack/commons-pages.admin.abuse_reports.show-pages.admin.topics.edit-pages.admin.topics.new-pages.groups.i-d1e76443.ab1ba0e4.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.groups.new-pages.import.gitlab_projects.new-pages.import.manifest.new-pages.projects.n-44c6c18e.6260fc30.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.search.show-super_sidebar.aceaa795.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/super_sidebar.f0ecf5f9.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.projects-pages.projects.activity-pages.projects.alert_management.details-pages.project-2e472f70.9d339164.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/24af373d.e04a9537.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.groups.packages-pages.groups.registry.repositories-pages.projects.blob.show-pages.proj-5dce5667.6238ba8a.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.projects.blob.show-pages.projects.branches.new-pages.projects.commits.show-pages.proje-81161c0b.84b13289.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/dbe6a049.3b9aa739.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.import.bitbucket_server.new-pages.import.gitea.new-pages.import.gitlab_projects.new-pa-55ede53c.936957ea.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.projects.blob.show-pages.projects.show-pages.projects.snippets.edit-pages.projects.sni-42df7d4c.dec8b79a.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.projects.blob.show-pages.projects.show-pages.projects.snippets.show-pages.projects.tre-c684fcf6.eba91a0d.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.projects.blob.edit-pages.projects.blob.new-pages.projects.blob.show-pages.projects.sho-ec79e51c.2845eef8.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.groups.show-pages.projects.blob.show-pages.projects.show-pages.projects.tree.show.028e0056.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.projects.blob.show-pages.projects.show-pages.projects.tree.show-pages.search.show.20561255.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.projects.blob.show-pages.projects.show-pages.projects.tree.show.1f04261c.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.projects.blob.show-pages.projects.tree.show.d3aa56b0.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/commons-pages.projects.blob.show-pages.projects.commit.show.3848a3f5.chunk.js" defer="defer"></script>
+<script src="/assets/webpack/pages.projects.blob.show.cd28a774.chunk.js" defer="defer"></script>
+
+<meta content="object" property="og:type">
+<meta content="GitLab" property="og:site_name">
+<meta content="Testing/Data/bunny.ply.sha512 · master · VTK / VTK · GitLab" property="og:title">
+<meta content="Visualization Toolkit" property="og:description">
+<meta content="https://gitlab.kitware.com/uploads/-/system/project/avatar/13/vtk_logo-main1.png" property="og:image">
+<meta content="64" property="og:image:width">
+<meta content="64" property="og:image:height">
+<meta content="https://gitlab.kitware.com/vtk/vtk/-/blob/master/Testing/Data/bunny.ply.sha512" property="og:url">
+<meta content="summary" property="twitter:card">
+<meta content="Testing/Data/bunny.ply.sha512 · master · VTK / VTK · GitLab" property="twitter:title">
+<meta content="Visualization Toolkit" property="twitter:description">
+<meta content="https://gitlab.kitware.com/uploads/-/system/project/avatar/13/vtk_logo-main1.png" property="twitter:image">
+
+<meta name="csrf-param" content="authenticity_token" />
+<meta name="csrf-token" content="cGbElTKNZ1Kp6SO4jC4g1nKOZ-NqTBzVR_DT1Y1FmAPO-YWEhBtQaQ4ztWhH9QLcXKWzGjtWYnLTBGul2wOTmg" />
+<meta name="csp-nonce" />
+<meta name="action-cable-url" content="/-/cable" />
+<link href="/-/manifest.json" rel="manifest">
+<link rel="icon" type="image/png" href="/uploads/-/system/appearance/favicon/1/KitwareMarkIcon.png" id="favicon" data-original-href="/uploads/-/system/appearance/favicon/1/KitwareMarkIcon.png" />
+<link rel="apple-touch-icon" type="image/x-icon" href="/assets/apple-touch-icon-b049d4bc0dd9626f31db825d61880737befc7835982586d015bded10b4435460.png" />
+<link href="/search/opensearch.xml" rel="search" title="Search GitLab" type="application/opensearchdescription+xml">
+
+
+
+
+<meta content="Visualization Toolkit" name="description">
+<meta content="#ececef" name="theme-color">
+</head>
+
+<body class="tab-width-8 gl-browser-safari gl-platform-mac body-fixed-scrollbar" data-group="vtk" data-group-full-path="vtk" data-namespace-id="16" data-page="projects:blob:show" data-page-type-id="master/Testing/Data/bunny.ply.sha512" data-project="vtk" data-project-full-path="vtk/vtk" data-project-id="13">
+<div id="js-tooltips-container"></div>
+<div id="js-drawer-container"></div>
+
+<script>
+//<![CDATA[
+gl = window.gl || {};
+gl.client = {"isSafari":true,"isMac":true};
+
+
+//]]>
+</script>
+
+
+<header class="header-logged-out" data-testid="navbar">
+<a class="gl-sr-only gl-accessibility" href="#content-body">Skip to content</a>
+<div class="container-fluid">
+<nav aria-label="Explore GitLab" class="header-logged-out-nav gl-flex gl-gap-3 gl-justify-between">
+<div class="gl-flex gl-items-center gl-gap-1">
+<span class="gl-sr-only">GitLab</span>
+<a title="Homepage" id="logo" class="header-logged-out-logo has-tooltip" aria-label="Homepage" data-track-label="main_navigation" data-track-action="click_gitlab_logo_link" data-track-property="navigation_top" href="/"><svg aria-hidden="true" role="img" class="tanuki-logo" width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path class="tanuki-shape tanuki" d="m24.507 9.5-.034-.09L21.082.562a.896.896 0 0 0-1.694.091l-2.29 7.01H7.825L5.535.653a.898.898 0 0 0-1.694-.09L.451 9.411.416 9.5a6.297 6.297 0 0 0 2.09 7.278l.012.01.03.022 5.16 3.867 2.56 1.935 1.554 1.176a1.051 1.051 0 0 0 1.268 0l1.555-1.176 2.56-1.935 5.197-3.89.014-.01A6.297 6.297 0 0 0 24.507 9.5Z"
+        fill="#E24329"/>
+  <path class="tanuki-shape right-cheek" d="m24.507 9.5-.034-.09a11.44 11.44 0 0 0-4.56 2.051l-7.447 5.632 4.742 3.584 5.197-3.89.014-.01A6.297 6.297 0 0 0 24.507 9.5Z"
+        fill="#FC6D26"/>
+  <path class="tanuki-shape chin" d="m7.707 20.677 2.56 1.935 1.555 1.176a1.051 1.051 0 0 0 1.268 0l1.555-1.176 2.56-1.935-4.743-3.584-4.755 3.584Z"
+        fill="#FCA326"/>
+  <path class="tanuki-shape left-cheek" d="M5.01 11.461a11.43 11.43 0 0 0-4.56-2.05L.416 9.5a6.297 6.297 0 0 0 2.09 7.278l.012.01.03.022 5.16 3.867 4.745-3.584-7.444-5.632Z"
+        fill="#FC6D26"/>
+</svg>
+
+</a></div>
+<ul class="gl-list-none gl-p-0 gl-m-0 gl-flex gl-gap-3 gl-items-center gl-grow">
+<li class="header-logged-out-nav-item">
+<a class="" href="/explore">Explore</a>
+</li>
+</ul>
+<ul class="gl-list-none gl-p-0 gl-m-0 gl-flex gl-gap-3 gl-items-center gl-justify-end">
+<li class="header-logged-out-nav-item">
+<a href="/users/sign_in?redirect_to_referer=yes">Sign in</a>
+</li>
+<li class="header-logged-out-nav-item">
+<a class="gl-button btn btn-md btn-confirm !gl-inline-flex" href="/users/sign_up"><span class="gl-button-text">
+Register
+
+</span>
+
+</a></li>
+</ul>
+</nav>
+</div>
+</header>
+
+<div class="layout-page page-with-super-sidebar">
+<aside class="js-super-sidebar super-sidebar super-sidebar-loading" data-command-palette="{&quot;project_files_url&quot;:&quot;/vtk/vtk/-/files/master?format=json&quot;,&quot;project_blob_url&quot;:&quot;/vtk/vtk/-/blob/master&quot;}" data-force-desktop-expanded-sidebar="" data-is-saas="false" data-root-path="/" data-sidebar="{&quot;is_logged_in&quot;:false,&quot;compare_plans_url&quot;:&quot;https://about.gitlab.com/pricing&quot;,&quot;context_switcher_links&quot;:[{&quot;title&quot;:&quot;Explore&quot;,&quot;link&quot;:&quot;/explore&quot;,&quot;icon&quot;:&quot;compass&quot;}],&quot;current_menu_items&quot;:[{&quot;id&quot;:&quot;project_overview&quot;,&quot;title&quot;:&quot;VTK&quot;,&quot;avatar&quot;:&quot;/uploads/-/system/project/avatar/13/vtk_logo-main1.png&quot;,&quot;entity_id&quot;:13,&quot;link&quot;:&quot;/vtk/vtk&quot;,&quot;link_classes&quot;:&quot;shortcuts-project&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;manage_menu&quot;,&quot;title&quot;:&quot;Manage&quot;,&quot;icon&quot;:&quot;users&quot;,&quot;avatar_shape&quot;:&quot;rect&quot;,&quot;link&quot;:&quot;/vtk/vtk/activity&quot;,&quot;is_active&quot;:false,&quot;items&quot;:[{&quot;id&quot;:&quot;activity&quot;,&quot;title&quot;:&quot;Activity&quot;,&quot;link&quot;:&quot;/vtk/vtk/activity&quot;,&quot;link_classes&quot;:&quot;shortcuts-project-activity&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;members&quot;,&quot;title&quot;:&quot;Members&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/project_members&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;labels&quot;,&quot;title&quot;:&quot;Labels&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/labels&quot;,&quot;is_active&quot;:false}],&quot;separated&quot;:false},{&quot;id&quot;:&quot;plan_menu&quot;,&quot;title&quot;:&quot;Plan&quot;,&quot;icon&quot;:&quot;planning&quot;,&quot;avatar_shape&quot;:&quot;rect&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/issues&quot;,&quot;is_active&quot;:false,&quot;items&quot;:[{&quot;id&quot;:&quot;project_issue_list&quot;,&quot;title&quot;:&quot;Issues&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/issues&quot;,&quot;link_classes&quot;:&quot;shortcuts-issues has-sub-items&quot;,&quot;pill_count_field&quot;:&quot;openIssuesCount&quot;,&quot;pill_count_dynamic&quot;:false,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;boards&quot;,&quot;title&quot;:&quot;Issue boards&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/boards&quot;,&quot;link_classes&quot;:&quot;shortcuts-issue-boards&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;milestones&quot;,&quot;title&quot;:&quot;Milestones&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/milestones&quot;,&quot;is_active&quot;:false}],&quot;separated&quot;:false},{&quot;id&quot;:&quot;code_menu&quot;,&quot;title&quot;:&quot;Code&quot;,&quot;icon&quot;:&quot;code&quot;,&quot;avatar_shape&quot;:&quot;rect&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/merge_requests&quot;,&quot;is_active&quot;:true,&quot;items&quot;:[{&quot;id&quot;:&quot;project_merge_request_list&quot;,&quot;title&quot;:&quot;Merge requests&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/merge_requests&quot;,&quot;link_classes&quot;:&quot;shortcuts-merge_requests&quot;,&quot;pill_count_field&quot;:&quot;openMergeRequestsCount&quot;,&quot;pill_count_dynamic&quot;:false,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;files&quot;,&quot;title&quot;:&quot;Repository&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/tree/master&quot;,&quot;link_classes&quot;:&quot;shortcuts-tree&quot;,&quot;is_active&quot;:true},{&quot;id&quot;:&quot;branches&quot;,&quot;title&quot;:&quot;Branches&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/branches&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;commits&quot;,&quot;title&quot;:&quot;Commits&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/commits/master?ref_type=heads&quot;,&quot;link_classes&quot;:&quot;shortcuts-commits&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;tags&quot;,&quot;title&quot;:&quot;Tags&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/tags&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;graphs&quot;,&quot;title&quot;:&quot;Repository graph&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/network/master?ref_type=heads&quot;,&quot;link_classes&quot;:&quot;shortcuts-network&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;compare&quot;,&quot;title&quot;:&quot;Compare revisions&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/compare?from=master\u0026to=master&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;project_snippets&quot;,&quot;title&quot;:&quot;Snippets&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/snippets&quot;,&quot;link_classes&quot;:&quot;shortcuts-snippets&quot;,&quot;is_active&quot;:false}],&quot;separated&quot;:false},{&quot;id&quot;:&quot;build_menu&quot;,&quot;title&quot;:&quot;Build&quot;,&quot;icon&quot;:&quot;rocket&quot;,&quot;avatar_shape&quot;:&quot;rect&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/pipelines&quot;,&quot;is_active&quot;:false,&quot;items&quot;:[{&quot;id&quot;:&quot;pipelines&quot;,&quot;title&quot;:&quot;Pipelines&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/pipelines&quot;,&quot;link_classes&quot;:&quot;shortcuts-pipelines&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;jobs&quot;,&quot;title&quot;:&quot;Jobs&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/jobs&quot;,&quot;link_classes&quot;:&quot;shortcuts-builds&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;pipeline_schedules&quot;,&quot;title&quot;:&quot;Pipeline schedules&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/pipeline_schedules&quot;,&quot;link_classes&quot;:&quot;shortcuts-builds&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;artifacts&quot;,&quot;title&quot;:&quot;Artifacts&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/artifacts&quot;,&quot;link_classes&quot;:&quot;shortcuts-builds&quot;,&quot;is_active&quot;:false}],&quot;separated&quot;:false},{&quot;id&quot;:&quot;deploy_menu&quot;,&quot;title&quot;:&quot;Deploy&quot;,&quot;icon&quot;:&quot;deployments&quot;,&quot;avatar_shape&quot;:&quot;rect&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/releases&quot;,&quot;is_active&quot;:false,&quot;items&quot;:[{&quot;id&quot;:&quot;releases&quot;,&quot;title&quot;:&quot;Releases&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/releases&quot;,&quot;link_classes&quot;:&quot;shortcuts-deployments-releases&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;packages_registry&quot;,&quot;title&quot;:&quot;Package registry&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/packages&quot;,&quot;link_classes&quot;:&quot;shortcuts-container-registry&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;model_registry&quot;,&quot;title&quot;:&quot;Model registry&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/ml/models&quot;,&quot;is_active&quot;:false}],&quot;separated&quot;:false},{&quot;id&quot;:&quot;operations_menu&quot;,&quot;title&quot;:&quot;Operate&quot;,&quot;icon&quot;:&quot;cloud-pod&quot;,&quot;avatar_shape&quot;:&quot;rect&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/environments&quot;,&quot;is_active&quot;:false,&quot;items&quot;:[{&quot;id&quot;:&quot;environments&quot;,&quot;title&quot;:&quot;Environments&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/environments&quot;,&quot;link_classes&quot;:&quot;shortcuts-environments&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;infrastructure_registry&quot;,&quot;title&quot;:&quot;Terraform modules&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/terraform_module_registry&quot;,&quot;is_active&quot;:false}],&quot;separated&quot;:false},{&quot;id&quot;:&quot;monitor_menu&quot;,&quot;title&quot;:&quot;Monitor&quot;,&quot;icon&quot;:&quot;monitor&quot;,&quot;avatar_shape&quot;:&quot;rect&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/incidents&quot;,&quot;is_active&quot;:false,&quot;items&quot;:[{&quot;id&quot;:&quot;incidents&quot;,&quot;title&quot;:&quot;Incidents&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/incidents&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;service_desk&quot;,&quot;title&quot;:&quot;Service Desk&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/issues/service_desk&quot;,&quot;is_active&quot;:false}],&quot;separated&quot;:false},{&quot;id&quot;:&quot;analyze_menu&quot;,&quot;title&quot;:&quot;Analyze&quot;,&quot;icon&quot;:&quot;chart&quot;,&quot;avatar_shape&quot;:&quot;rect&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/value_stream_analytics&quot;,&quot;is_active&quot;:false,&quot;items&quot;:[{&quot;id&quot;:&quot;cycle_analytics&quot;,&quot;title&quot;:&quot;Value stream analytics&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/value_stream_analytics&quot;,&quot;link_classes&quot;:&quot;shortcuts-project-cycle-analytics&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;contributors&quot;,&quot;title&quot;:&quot;Contributor analytics&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/graphs/master?ref_type=heads&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;ci_cd_analytics&quot;,&quot;title&quot;:&quot;CI/CD analytics&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/pipelines/charts&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;repository_analytics&quot;,&quot;title&quot;:&quot;Repository analytics&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/graphs/master/charts&quot;,&quot;link_classes&quot;:&quot;shortcuts-repository-charts&quot;,&quot;is_active&quot;:false},{&quot;id&quot;:&quot;model_experiments&quot;,&quot;title&quot;:&quot;Model experiments&quot;,&quot;link&quot;:&quot;/vtk/vtk/-/ml/experiments&quot;,&quot;is_active&quot;:false}],&quot;separated&quot;:false}],&quot;current_context_header&quot;:&quot;Project&quot;,&quot;support_path&quot;:&quot;https://about.gitlab.com/get-help/&quot;,&quot;docs_path&quot;:&quot;/help/docs&quot;,&quot;display_whats_new&quot;:false,&quot;show_version_check&quot;:null,&quot;search&quot;:{&quot;search_path&quot;:&quot;/search&quot;,&quot;issues_path&quot;:&quot;/dashboard/issues&quot;,&quot;mr_path&quot;:&quot;/dashboard/merge_requests&quot;,&quot;autocomplete_path&quot;:&quot;/search/autocomplete&quot;,&quot;settings_path&quot;:&quot;/search/settings&quot;,&quot;search_context&quot;:{&quot;group&quot;:{&quot;id&quot;:16,&quot;name&quot;:&quot;VTK&quot;,&quot;full_name&quot;:&quot;VTK&quot;},&quot;group_metadata&quot;:{&quot;issues_path&quot;:&quot;/groups/vtk/-/issues&quot;,&quot;mr_path&quot;:&quot;/groups/vtk/-/merge_requests&quot;},&quot;project&quot;:{&quot;id&quot;:13,&quot;name&quot;:&quot;VTK&quot;},&quot;project_metadata&quot;:{&quot;mr_path&quot;:&quot;/vtk/vtk/-/merge_requests&quot;,&quot;issues_path&quot;:&quot;/vtk/vtk/-/issues&quot;},&quot;code_search&quot;:true,&quot;ref&quot;:&quot;master&quot;,&quot;scope&quot;:null,&quot;for_snippets&quot;:null}},&quot;panel_type&quot;:&quot;project&quot;,&quot;shortcut_links&quot;:[{&quot;title&quot;:&quot;Snippets&quot;,&quot;href&quot;:&quot;/explore/snippets&quot;,&quot;css_class&quot;:&quot;dashboard-shortcuts-snippets&quot;},{&quot;title&quot;:&quot;Groups&quot;,&quot;href&quot;:&quot;/explore/groups&quot;,&quot;css_class&quot;:&quot;dashboard-shortcuts-groups&quot;},{&quot;title&quot;:&quot;Projects&quot;,&quot;href&quot;:&quot;/explore/projects/starred&quot;,&quot;css_class&quot;:&quot;dashboard-shortcuts-projects&quot;}],&quot;terms&quot;:null}"></aside>
+
+
+<div class="content-wrapper">
+<div class="broadcast-wrapper">
+
+<div class="gl-broadcast-message banner js-broadcast-notification-217 indigo" data-broadcast-banner data-testid="banner-broadcast-message" role="alert">
+<div class="gl-broadcast-message-content">
+<div class="gl-broadcast-message-icon">
+<svg class="s16" data-testid="bullhorn-icon"><use href="/assets/icons-8965d58b6b3baa502c90d0aa2528ec1693b49c44dab4c98a9fa3a1f927647d8b.svg#bullhorn"></use></svg>
+</div>
+<div class="gl-broadcast-message-text">
+<h2 class="gl-sr-only">Admin message</h2>
+<p>System updates will be applied on September 12th between 9:30am and 11:00am, EDT (UTC-04:00). This site will have intermittent downtime during that time.</p>
+</div>
+</div>
+</div>
+
+
+
+
+</div>
+<div class="alert-wrapper alert-wrapper-top-space gl-flex gl-flex-col gl-gap-3 container-fluid container-limited">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</div>
+
+<div class="top-bar-fixed container-fluid" data-testid="top-bar">
+<div class="top-bar-container gl-flex gl-items-center gl-gap-2">
+<div class="gl-grow gl-basis-0 gl-flex gl-items-center gl-justify-start gl-gap-3">
+<button class="gl-button btn btn-icon btn-md btn-default btn-default-tertiary js-super-sidebar-toggle-expand super-sidebar-toggle -gl-ml-3" aria-controls="super-sidebar" aria-expanded="false" aria-label="Primary navigation sidebar" type="button"><svg class="s16 gl-icon gl-button-icon " data-testid="sidebar-icon"><use href="/assets/icons-8965d58b6b3baa502c90d0aa2528ec1693b49c44dab4c98a9fa3a1f927647d8b.svg#sidebar"></use></svg>
+
+</button>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"VTK","item":"https://gitlab.kitware.com/vtk"},{"@type":"ListItem","position":2,"name":"VTK","item":"https://gitlab.kitware.com/vtk/vtk"},{"@type":"ListItem","position":3,"name":"Repository","item":"https://gitlab.kitware.com/vtk/vtk/-/blob/master/Testing/Data/bunny.ply.sha512"}]}
+
+
+</script>
+<div data-testid="breadcrumb-links" id="js-vue-page-breadcrumbs-wrapper">
+<div data-breadcrumbs-json="[{&quot;text&quot;:&quot;VTK&quot;,&quot;href&quot;:&quot;/vtk&quot;,&quot;avatarPath&quot;:&quot;/uploads/-/system/group/avatar/16/vtk_logo-main1.png&quot;},{&quot;text&quot;:&quot;VTK&quot;,&quot;href&quot;:&quot;/vtk/vtk&quot;,&quot;avatarPath&quot;:&quot;/uploads/-/system/project/avatar/13/vtk_logo-main1.png&quot;},{&quot;text&quot;:&quot;Repository&quot;,&quot;href&quot;:&quot;/vtk/vtk/-/blob/master/Testing/Data/bunny.ply.sha512&quot;,&quot;avatarPath&quot;:null}]" id="js-vue-page-breadcrumbs"></div>
+<div id="js-injected-page-breadcrumbs"></div>
+<div id="js-page-breadcrumbs-extra"></div>
+</div>
+
+
+</div>
+</div>
+</div>
+
+<div class="container-fluid container-limited project-highlight-puc">
+<main class="content" id="content-body" itemscope itemtype="http://schema.org/SoftwareSourceCode">
+<div class="flash-container flash-container-page sticky" data-testid="flash-container">
+<div id="js-global-alerts"></div>
+</div>
+
+
+
+
+
+
+<div class="js-signature-container" data-signatures-path="/vtk/vtk/-/commits/d6d05b2a066fbc064a11ebf4f5ff9e5e7ee622b5/signatures?limit=1"></div>
+
+<div class="tree-holder gl-pt-4" id="tree-holder">
+<div data-blob-path="Testing/Data/bunny.ply.sha512" data-breadcrumbs-can-collaborate="false" data-breadcrumbs-can-edit-tree="false" data-breadcrumbs-can-push-code="false" data-breadcrumbs-can-push-to-branch="false" data-breadcrumbs-new-blob-path="/vtk/vtk/-/new/master" data-breadcrumbs-new-branch-path="/vtk/vtk/-/branches/new" data-breadcrumbs-new-dir-path="/vtk/vtk/-/create_dir/master" data-breadcrumbs-new-tag-path="/vtk/vtk/-/tags/new" data-breadcrumbs-upload-path="/vtk/vtk/-/create/master" data-download-links="[{&quot;text&quot;:&quot;zip&quot;,&quot;path&quot;:&quot;/vtk/vtk/-/archive/master/vtk-master.zip&quot;},{&quot;text&quot;:&quot;tar.gz&quot;,&quot;path&quot;:&quot;/vtk/vtk/-/archive/master/vtk-master.tar.gz&quot;},{&quot;text&quot;:&quot;tar.bz2&quot;,&quot;path&quot;:&quot;/vtk/vtk/-/archive/master/vtk-master.tar.bz2&quot;},{&quot;text&quot;:&quot;tar&quot;,&quot;path&quot;:&quot;/vtk/vtk/-/archive/master/vtk-master.tar&quot;}]" data-escaped-ref="master" data-history-link="/vtk/vtk/-/commits/master" data-http-url="https://gitlab.kitware.com/vtk/vtk.git" data-project-id="13" data-project-path="vtk/vtk" data-project-root-path="/vtk/vtk" data-project-short-path="vtk" data-ref="master" data-ref-type="" data-root-ref="master" data-ssh-url="git@gitlab.kitware.com:vtk/vtk.git" data-xcode-url="" id="js-repository-blob-header-app"></div>
+<div class="info-well">
+<div data-history-link="/vtk/vtk/-/commits/master" id="js-last-commit"></div>
+<div class="gl-hidden sm:gl-block">
+
+</div>
+</div>
+<div class="blob-content-holder js-per-page" data-blame-per-page="1000" id="blob-content-holder">
+<div data-blob-path="Testing/Data/bunny.ply.sha512" data-can-download-code="true" data-escaped-ref="master" data-full-name="VTK / VTK" data-original-branch="master" data-project-path="vtk/vtk" data-ref-type="" data-resource-id="gid://gitlab/Project/13" data-user-id="" id="js-view-blob-app">
+<div class="gl-spinner-container" role="status"><span aria-hidden class="gl-spinner gl-spinner-md gl-spinner-dark !gl-align-text-bottom"></span><span class="gl-sr-only !gl-absolute">Loading</span>
+</div>
+</div>
+</div>
+
+</div>
+<script>
+//<![CDATA[
+  window.gl = window.gl || {};
+  window.gl.webIDEPath = '/-/ide/project/vtk/vtk/edit/master/-/Testing/Data/bunny.ply.sha512'
+
+
+//]]>
+</script>
+<div data-ambiguous="false" data-ref="master" id="js-ambiguous-ref-modal"></div>
+
+</main>
+</div>
+
+
+</div>
+</div>
+
+
+<script>
+//<![CDATA[
+if ('loading' in HTMLImageElement.prototype) {
+  document.querySelectorAll('img.lazy').forEach(img => {
+    img.loading = 'lazy';
+    let imgUrl = img.dataset.src;
+    // Only adding width + height for avatars for now
+    if (imgUrl.indexOf('/avatar/') > -1 && imgUrl.indexOf('?') === -1) {
+      const targetWidth = img.getAttribute('width') || img.width;
+      imgUrl += `?width=${targetWidth}`;
+    }
+    img.src = imgUrl;
+    img.removeAttribute('data-src');
+    img.classList.remove('lazy');
+    img.classList.add('js-lazy-loaded');
+    img.dataset.testid = 'js-lazy-loaded-content';
+  });
+}
+
+//]]>
+</script>
+<script>
+//<![CDATA[
+gl = window.gl || {};
+gl.experiments = {};
+
+
+//]]>
+</script>
+
+</body>
+</html>
+

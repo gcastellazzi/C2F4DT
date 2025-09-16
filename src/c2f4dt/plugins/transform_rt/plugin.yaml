@@ -1,0 +1,6 @@
+name: transform_rt
+version: "0.1.0"
+description: Rotation/Translation tools with .conf loader (bunny-style)
+order: 10
+requires: [PySide6, pyvista]
+entry_point: "plugin:register"

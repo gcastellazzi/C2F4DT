@@ -1,18 +1,14 @@
-# Cloud2FEMi — Developer Guide
+# C2F4DT — Developer Guide
+<img src="assets/logo-cloud2fem.png" alt="C2F4DT Logo" width="300" height="300" align="right"> Welcome to the **C2F4DT** developer documentation. This site collects guidelines, code architecture, theory, and an **auto-generated API reference**.  
 
-Welcome to the **Cloud2FEMi** developer documentation. This site collects guidelines, code architecture, theory, and an **auto-generated API reference**.
+**C2F4DT** is a modular software package designed as a 3D viewer and interaction environment built on VTK. Its primary goal is to provide a framework where plugins can be developed to visualize and interact with point clouds and finite element models. Within this architecture, **Cloud2FEM** is included as one of the plugins, enabling users to transform point cloud data into finite element meshes.
 
-![Normals visualization](assets/image2.png)
+The concept behind C2F4DT is to serve as a host for digital twins of finite element models that can be initialized or continuously updated using point cloud data or IoT (Internet of Things) streams. This first release focuses on the core viewer capabilities, establishing a foundation for visualization, interaction, and plugin integration.
 
-
-## About Cloud2FEMi
-
-**Cloud2FEMi** is an open-source software tool designed to bridge the gap between 3D point cloud data and finite element method (FEM) models. It enables researchers and engineers to efficiently process point clouds obtained from various scanning technologies and convert them into high-quality FEM meshes for structural analysis and simulation. Developed in the context of structural health monitoring and civil engineering, Cloud2FEMi facilitates advanced modeling workflows by automating key steps from raw data to simulation-ready models.
-
-![Slicing visualization](assets/image1.png)
+Future versions will extend the package with additional plugins and extensions, enhancing functionality and enabling more advanced workflows for digital twin management and structural analysis.
 
 ## Features
-
+<img src="assets/image3.png" alt="C2F4DT Logo" width="300" height="300" align="right">
 - Import and preprocess 3D point clouds from multiple formats
 - Slice point clouds into meaningful cross-sections
 - Generate centroids and polygons to represent structural elements
@@ -31,7 +27,7 @@ Cloud2FEMi and its underlying methodologies have been described and validated in
 ## Getting Started
 
 To begin exploring Cloud2FEMi, we recommend reviewing the following sections:
-
+<img src="assets/image4.png" alt="C2F4DT Logo" width="300" height="300" align="right">
 - [Installation](guide/installation.md)
 - [Overview](guide/overview.md)
 - [Theory & Equations](guide/theory.md)

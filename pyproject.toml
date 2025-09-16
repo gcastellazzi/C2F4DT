@@ -1,19 +1,26 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "c2f4dt"
-version = "1.0.0"
-description = "Cloud2FEM for Digital Twins – GUI and plugin framework"
-authors = [{name="Giovanni Castellazzi"}]
-readme = "README.md"
-requires-python = ">=3.11"
+version = "0.1.0"
+description = "Cloud2FEM for Digital Twins tools"
+requires-python = ">=3.10"
 dependencies = []
 
-[tool.black]
-line-length = 100
-target-version = ["py311"]
+[tool.setuptools]
+package-dir = {"" = "src"}
 
-[tool.isort]
-profile = "black"
-line_length = 100
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["c2f4dt*"]
 
-[tool.pytest.ini_options]
-addopts = "-q"
+# Includi asset non-Python nel wheel
+[tool.setuptools.package-data]
+c2f4dt = ["assets/**/*", "ui/**/*.ui", "ui/**/*.qss", "ui/**/*.png", "ui/**/*.svg"]
+
+# (Facoltativo) entry points per plugin built-in caricati via entry points
+[project.entry-points."c2f4dt.plugins"]
+# chiave=nome-plugin esposto ; valore=modulo:oggetto
+sample = "c2f4dt.plugins_builtin.sample:Plugin"

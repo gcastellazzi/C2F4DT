@@ -1,44 +1,47 @@
 ## Flowchart of main components
 
-The following Mermaid flowchart illustrates the main components and data flow within the Cloud2FEMi application, covering GUI elements, data input/output, processing steps, data models, grid and FEM generation, visualization overlays, and optional tools.
+The following Mermaid flowchart illustrates the main components and data flow within the **C2F4DT** application.  
+C2F4DT acts as a viewer and plugin host. The diagram shows GUI elements, data input/output, processing steps, data models, grid and FEM generation, visualization overlays, and optional tools.  
+**Cloud2FEM** is represented as a built-in plugin extending these capabilities.
+
 
 ```mermaid
 flowchart TD
   %% Grouped by responsibility
   subgraph "GUI / UX"
-    A1["Main Window (PySide6) — cloud2fem.ui.main_window"]
-    A2["3D Viewer (PyVista/VTK) — cloud2fem.ui.viewers.viewer"]
-    A3["2D Slice Window — cloud2fem.ui.viewers.pyvista_backend"]
+    A1["Main Window (PySide6) — c2f4dt.main_window"]
+    A2["3D Viewer (PyVista/VTK) — c2f4dt.ui.viewer3d"]
+    A3["2D Slice Window — c2f4dt.ui.display_panel"]
   end
 
   subgraph "I/O"
-    B1["Point Cloud Import/Export — cloud2fem.io.pcl"]
-    B2["Boundary Conditions Export — cloud2fem.io.bcs"]
+    B1["Point Cloud Import/Export — c2f4dt.utils.io.importers"]
+    B2["Boundary Conditions Export — c2f4dt.plugins.cloud2fem (BCs)"]
   end
 
   subgraph "Data Model"
-    C1["TwinState / SliceSet / Slice — cloud2fem.model.types"]
-    C2["Materials & Boundary Conditions — cloud2fem.model.types"]
+    C1["TwinState / SliceSet / Slice — c2f4dt.plugins.cloud2fem.model"]
+    C2["Materials & Boundary Conditions — c2f4dt.plugins.cloud2fem.model"]
   end
 
   subgraph "Processing"
-    D1["Create Slices — cloud2fem.ops.slices"]
-    D2["Centroid & Feature Extraction — cloud2fem.ops.geometry"]
-    D3["Normals Estimation — cloud2fem.ops.normals"]
+    D1["Create Slices — c2f4dt.plugins.cloud2fem.slices"]
+    D2["Centroid & Feature Extraction — c2f4dt.plugins.cloud2fem.geometry"]
+    D3["Normals Estimation — c2f4dt.plugins.cloud2fem.normals"]
   end
 
   subgraph "Grid & FEM"
-    E1["Grid Model — cloud2fem.grid.grid_model"]
-    E2["FEM Generation / Export — (placeholder)"]
+    E1["Grid Model — c2f4dt.plugins.cloud2fem.grid_model"]
+    E2["FEM Generation / Export — c2f4dt.plugins.cloud2fem (FEM)"]
   end
 
   subgraph "Visualization"
-    F1["2D Overlays (Points / Labels) — cloud2fem.viz.overlays"]
-    F2["3D Overlays (Points / Labels) — cloud2fem.viz.overlays_3d"]
+    F1["2D Overlays (Points / Labels) — c2f4dt.ui.display_panel"]
+    F2["3D Overlays (Points / Labels) — c2f4dt.ui.viewer3d"]
   end
 
   subgraph "Optional Tools"
-    G1["Additional Utilities — cloud2fem.tools.optional"]
+    G1["Additional Utilities / Plugins — c2f4dt.plugins.*"]
   end
   ```
 
@@ -62,4 +65,4 @@ flowchart TD
   A1 -->|Open 2D View| A3
   C1 -->|Slice Layers| A3
   G1 -->|Optional Utilities| A1
-```
+```mermaid

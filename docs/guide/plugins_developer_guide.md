@@ -1,6 +1,8 @@
-# Cloud2FEMi — Plugin/Extensions Developer Guide
+# C2F4DT — Plugin/Extensions Developer Guide
 
-This guide shows how to build **drop-in extensions** for Cloud2FEMi without touching `main_window.py`. Extensions live in the `./extensions/` folder and are loaded automatically at startup.
+This guide shows how to build **drop-in extensions** for C2F4DT without modifying `main_window.py`.  
+Extensions live in the `./extensions/` folder and are loaded automatically at startup.  
+The **Cloud2FEM** plugin is included as an example, but the framework is designed for any plugin or extension.
 
 ## TL;DR
 - Create a folder under `extensions/your_plugin/`
@@ -55,6 +57,8 @@ class HostContext:
     log: callable               # log(level, message)
 ```
 
+*(In the current codebase, `HostContext` is defined in `c2f4dt.plugins.manager` and re-used by plugins.)*
+
 - Use `ctx.add_tab(widget_title, widget, target="main")` to add whole tabs to `tabMain`.
 - Access existing content panels with:
   - `scrollDISPLAY_CONTENT`, `scrollSLICING_CONTENT`, `scrollFEM_CONTENT`, `scrollRESULTS_CONTENT`
@@ -71,7 +75,7 @@ class HostContext:
 from __future__ import annotations
 from typing import Optional
 from PySide6 import QtWidgets
-from cloud2fem.plugins.api import HostContext
+from c2f4dt.plugins.manager import HostContext
 
 class MyPlugin:
     name = "My Plugin"

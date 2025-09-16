@@ -1,7 +1,6 @@
 # --- C2F4DT / Python ---
 # Local virtual environments
 .venv_c2f4dt/
-.venv_c2f4dt/
 
 # Byte-compiled / cache
 __pycache__/

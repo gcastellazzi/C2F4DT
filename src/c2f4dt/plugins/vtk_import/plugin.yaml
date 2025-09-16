@@ -1,0 +1,6 @@
+name: vtk_import
+version: "0.1.0"
+description: "VTK Import & ParaView-like Display controls"
+order: 10
+requires: [pyvista]
+entry_point: "plugin:register"

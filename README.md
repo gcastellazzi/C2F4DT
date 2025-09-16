@@ -6,7 +6,7 @@ See `docs/` for the full specification and run instructions below.
 ## Quick start
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+source .venv_c2f4dt/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python main.py
 ```

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "datasets": [
+    {
+      "name": "Armadillo.ply",
+      "kind": "points",
+      "ds_index": 0,
+      "point_size": 3,
+      "point_budget": 100,
+      "color_mode": "Normal Colormap",
+      "colormap": "viridis",
+      "solid_color": [
+        0.9,
+        0.36,
+        0.36
+      ],
+      "points_as_spheres": false,
+      "source_path": "C:/Users/giovanni.castellazzi/Dropbox/GitHub/C2F4DT/tests/Armadillo.ply"
+    }
+  ],
+  "viewer": {
+    "color_mode": "Normal Colormap",
+    "colormap": "viridis",
+    "point_size": 3,
+    "view_budget_percent": 100,
+    "points_as_spheres": false
+  },
+  "options": {
+    "downsample_method": "random",
+    "normals_fast_enabled": false,
+    "normals_k": 16,
+    "normals_fast_max_points": 250000
+  }
+}
