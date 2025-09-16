@@ -2,26 +2,26 @@
 """
 VTK Import & Display plugin for C2F4DT.
 
-COSA FA IL PLUGIN
------------------
-- Aggiunge una voce di menu: File ▸ Import VTK… (con scorciatoia)
-- Importa un *singolo* file VTK/VTU/VTP/VTM/VTS/VTR/VTI/OBJ/STL
-- Se MultiBlock: tiene *un unico attore* (come da preferenza)
-- Se il reader espone `time_values`: aggiunge un semplice time-slider nel box
-- Crea un box “VTK Display” nello scrollDISPLAY con controlli stile ParaView:
-  * Representation: Points / Wireframe / Surface / Surface with Edges / Volume (se applicabile)
-  * Color by: Solid Color / arrays (PointData/CellData), per vettori Mag/ X / Y / Z
-  * LUT + invert, Rescale to Data, Scalar Bar On/Off
-  * Opacity, Point Size, Line Width
-  * Edge visibility + Edge color
-  * Lighting base (toggle)
-- Applica i cambi **live** al dataset “corrente” (selezione nel treeMCTS)
-- Salva in mcts il `source_path` + scelte essenziali (estendibile verso uno “style file”)
+WHAT THE PLUGIN DOES
+--------------------
+- Adds a menu entry: File ▸ Import VTK… (with shortcut)
+- Imports a *single* VTK/VTU/VTP/VTM/VTS/VTR/VTI/OBJ/STL file
+- If MultiBlock: keeps *a single actor* (as preferred)
+- If the reader exposes `time_values`: adds a simple time-slider in the box
+- Creates a “VTK Display” box in the scrollDISPLAY with ParaView-style controls:
+    * Representation: Points / Wireframe / Surface / Surface with Edges / Volume (if applicable)
+    * Color by: Solid Color / arrays (PointData/CellData), for vectors Mag/ X / Y / Z
+    * LUT + invert, Rescale to Data, Scalar Bar On/Off
+    * Opacity, Point Size, Line Width
+    * Edge visibility + Edge color
+    * Basic lighting (toggle)
+- Applies changes **live** to the “current” dataset (selected in treeMCTS)
+- Saves the `source_path` + essential choices in mcts (extendable towards a “style file”)
 
-COME ADATTARLO
---------------
-- Vedi i metodi `_apply_*` per mappare i controlli UI alle API del tuo Viewer3D
-- Se una API non è disponibile, i punti `TODO` indicano dove aggiungere il fallback
+HOW TO ADAPT IT
+---------------
+- See the `_apply_*` methods to map the UI controls to your Viewer3D APIs
+- If an API is unavailable, the `TODO` points indicate where to add the fallback
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ import os
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-# PyVista è una dipendenza dichiarata in plugin.yaml
+# PyVista is a dependency declared in plugin.yaml
 import pyvista as pv
 import numpy as np
 
@@ -58,9 +58,9 @@ def _normalize_cmap(name: str, invert: bool) -> str:
 # ---------------------------------------------------------------------
 def _add_to_display_panel(window, title: str, widget: QtWidgets.QWidget) -> None:
     """
-    Inserisce un *gruppo* nel pannello di destra (scrollDISPLAY).
-    Preferisce un eventuale API `add_plugin_section`, altrimenti inserisce
-    direttamente nel layout principale del DisplayPanel.
+    Adds a *group* to the right panel (scrollDISPLAY).
+    Prefers an existing `add_plugin_section` API if available, otherwise
+    directly inserts into the main layout of the DisplayPanel.
     """
     try:
         if hasattr(window.displayPanel, "add_plugin_section"):
@@ -69,7 +69,7 @@ def _add_to_display_panel(window, title: str, widget: QtWidgets.QWidget) -> None
     except Exception:
         pass
 
-    # Fallback: cassa dentro un QGroupBox e appendi al layout verticale principale.
+    # Fallback: wrap the widget in a QGroupBox and append it to the main vertical layout.
     box = QtWidgets.QGroupBox(title)
     box.setMaximumWidth(300)
     lay = QtWidgets.QVBoxLayout(box)
@@ -79,7 +79,7 @@ def _add_to_display_panel(window, title: str, widget: QtWidgets.QWidget) -> None
     widget.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
     box.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
     try:
-        # displayPanel è già inserito in una QScrollArea; usiamo il suo layout principale
+        # displayPanel is already embedded in a QScrollArea; we use its main layout
         lp = window.displayPanel.layout()
         if lp is None:
             lp = QtWidgets.QVBoxLayout(window.displayPanel)
@@ -363,31 +363,31 @@ def _fallback_render(window, e: dict, ds: int, *,
         pass
 
 # ---------------------------------------------------------------------
-# Plugin principale
+# Plugin class
 # ---------------------------------------------------------------------
 class VTKImportPlugin(QtCore.QObject):
     """
     Plugin “VTK Import & Display”.
 
-    Struttura:
-      - Azione menu + scorciatoia per import
-      - Box controlli visualizzazione, applicati al dataset corrente
-      - Rilevamento (best effort) del time-series via reader PyVista
+    Structure:
+      - Menu action + shortcut for import
+      - Display control box, applied to the current dataset
+      - Best effort detection of time-series via PyVista reader
     """
     def __init__(self, window):
         super().__init__(window)
         self.window = window
 
-        # Stato UI (per dataset corrente – si aggiorna ad ogni selezione nel tree)
+        # UI state (for current dataset - updates on each selection in the tree)
         self._current_ds: Optional[int] = None
         self._time_values: Optional[List[float]] = None
         self._time_idx: int = 0
 
-        # ----- Menu & scorciatoie --------------------------------------
+        # ----- Menu & shortcuts --------------------------------------
         self._action_import = QtGui.QAction(QtGui.QIcon(), "Import VTK…", self)
         # Shortcut: ⌘⇧I (mac) / Ctrl+Shift+I (others)
         self._action_import.setShortcut(QtGui.QKeySequence("Ctrl+Shift+I"))
-        # Nota: Qt convertirà su macOS in Cmd in base al platform shortcut context
+        # Note: Qt automatically adjusts shortcuts on macOS to use Cmd based on the platform shortcut context
         self._action_import.triggered.connect(self.open_dialog)
 
         # Aggiungi in File
@@ -404,7 +404,8 @@ class VTKImportPlugin(QtCore.QObject):
         self._panel = self._build_display_box()
         _add_to_display_panel(window, "VTK Display", self._panel)
 
-        # Tieni sincronizzati i controlli con il dataset selezionato
+        # Keep the controls synchronized with the selected dataset
+        self.window.treeMCTS.itemSelectionChanged.connect(self._on_tree_selection_changed)
         try:
             window.treeMCTS.itemSelectionChanged.connect(self._on_tree_selection_changed)
         except Exception:
@@ -416,9 +417,9 @@ class VTKImportPlugin(QtCore.QObject):
     @QtCore.Slot()
     def open_dialog(self):
         """
-        Dialog per scegliere UN file e importarlo con PyVista.
-        Gestione MultiBlock → UNICO attore.
-        Rileva (se presente) una time-series esponendo uno slider.
+        Dialog to select a SINGLE file and import it using PyVista.
+        Handles MultiBlock → SINGLE actor.
+        Detects (if present) a time-series and exposes a slider.
         """
         dlg = QtWidgets.QFileDialog(self.window, "Import VTK")
         dlg.setFileMode(QtWidgets.QFileDialog.ExistingFile)
@@ -447,7 +448,7 @@ class VTKImportPlugin(QtCore.QObject):
             self._msg(f"[VTK] Reader error: {ex}", error=True)
             return
 
-        # Prova a leggere time steps, se il reader li espone
+        # Try to detect time values
         self._time_values = None
         try:
             tvals = getattr(reader, "time_values", None)
@@ -467,13 +468,13 @@ class VTKImportPlugin(QtCore.QObject):
         dataset_to_add = data
         try:
             if isinstance(data, pv.MultiBlock):
-                # Se vuoi proprio *un unico attore*, puoi renderizzare il MultiBlock direttamente
-                # (PyVista gestisce internamente i blocchi con un unico mapper/actor composito).
+                # If you really want *a single actor*, you can render the MultiBlock directly
+                # (PyVista internally handles the blocks with a single composite mapper/actor).
                 dataset_to_add = data
         except Exception:
             pass
 
-        # Aggiungi al viewer
+        # Add to viewer
         try:
             ds_index = self._add_dataset_to_viewer(dataset_to_add, path)
         except Exception as ex:
@@ -486,16 +487,16 @@ class VTKImportPlugin(QtCore.QObject):
         except Exception:
             pass
 
-        # Seleziona il nuovo dataset nel tree
+        # Select the new dataset in the tree
         try:
             self._select_tree_item_for_ds(ds_index)
         except Exception:
             pass
 
-        # Mostra/aggiorna time slider se necessario
+        # Show/update time slider if needed
         self._sync_time_slider_visibility()
 
-        # Aggiorna Inspector
+        # Update Inspector
         try:
             self.window._refresh_inspector_tree()
         except Exception:
@@ -510,27 +511,31 @@ class VTKImportPlugin(QtCore.QObject):
         """
         name = os.path.splitext(os.path.basename(path))[0]
 
-        # Preferisci API dedicate se presenti
+        # Prefer dedicated APIs if available
         ds_index = None
         try:
             if hasattr(self.window.viewer3d, "add_pyvista_mesh"):
                 ds_index = self.window.viewer3d.add_pyvista_mesh(data)
             else:
-                # TODO: fallback generico (non usato se hai add_pyvista_mesh)
+                # Generic fallback (used if add_pyvista_mesh is not available)
                 actor = self.window.viewer3d.plotter.add_mesh(data, name=name)
-                # Registrazione manuale in viewer3d._datasets se necessario…
-                # Qui assumiamo l'API ufficiale esistente.
-                raise RuntimeError("Viewer3D.add_pyvista_mesh non disponibile")
+                # Manual registration in viewer3d._datasets if necessary
+                # Assuming the official API does not handle this automatically
+                if not hasattr(self.window.viewer3d, "_datasets"):
+                    self.window.viewer3d._datasets = []
+                ds_index = len(self.window.viewer3d._datasets)
+                self.window.viewer3d._datasets.append({"mesh": data, "actor": actor})
+                raise RuntimeError("Viewer3D.add_pyvista_mesh not available; used fallback registration.")
         except Exception as ex:
             raise
 
-        # Registra in mcts (nuova istanza sempre)
+        # Register in mcts (new instance always at the end of the list)
         entry = {
             "name": name,
-            "kind": "mesh",            # PolyData / Grid / MultiBlock → lo teniamo come 'mesh'
+            "kind": "mesh",            # PolyData / Grid / MultiBlock → keep as "mesh"
             "ds_index": ds_index,
-            "source_path": path,       # per reopen automatico
-            # default stile iniziale
+            "source_path": path,       # automatic reopening
+            # default initial style
             "representation": "Surface",
             "opacity": 100,
             "color_mode": "Solid Color",
@@ -544,12 +549,12 @@ class VTKImportPlugin(QtCore.QObject):
             "lighting": True,
         }
         self.window.mcts[name] = entry
-        self.window.mct = entry  # diventa “corrente”
+        self.window.mct = entry  # becomes "current"
 
-        # Crea nodo nell’albero se serve (riusa pipeline del MainWindow se disponibile)
+        # Create tree node if needed (reuse MainWindow pipeline if available)
         try:
-            # Se l’import ufficiale di MainWindow costruisce già il tree, potresti saltare questa parte.
-            # Qui costruiamo un nodo minimale come esempio:
+            # If the official MainWindow import already builds the tree, you might skip this part.
+            # Here we construct a minimal node as an example:
             self.window.treeMCTS.blockSignals(True)
             root = QtWidgets.QTreeWidgetItem([name])
             root.setFlags(root.flags() | QtCore.Qt.ItemIsUserCheckable | QtCore.Qt.ItemIsAutoTristate)
@@ -571,7 +576,7 @@ class VTKImportPlugin(QtCore.QObject):
         return ds_index
 
     # -----------------------------------------------------------------
-    # BOX CONTROLLI (stile ParaView, applicazione LIVE)
+    # BOX CONTROLS (ParaView, LIVE application)
     # -----------------------------------------------------------------
     def _build_display_box(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
@@ -732,7 +737,7 @@ class VTKImportPlugin(QtCore.QObject):
         return w
 
     # -----------------------------------------------------------------
-    # SYNC UI CON DATASET CORRENTE
+    # SYNC UI with current dataset / MCT entry
     # -----------------------------------------------------------------
     def _on_tree_selection_changed(self):
         ds = self._current_dataset_index()
@@ -760,7 +765,7 @@ class VTKImportPlugin(QtCore.QObject):
             return None
 
     def _select_tree_item_for_ds(self, ds_index: int) -> None:
-        """Prova a selezionare nel tree il root item con ds=ds_index."""
+        """Try to select the root item in the tree with ds=ds_index."""
         t = self.window.treeMCTS
         for i in range(t.topLevelItemCount()):
             root = t.topLevelItem(i)
@@ -811,17 +816,17 @@ class VTKImportPlugin(QtCore.QObject):
         self._apply_solid_color(ds, (col.red(), col.green(), col.blue()))
         self._save_to_mct("color_mode", "Solid Color")
         self._save_to_mct("solid_color", (col.red(), col.green(), col.blue()))
-        # Forza combo su “Solid Color”
+        # Force combo box to "Solid Color"
         self.cmbColorBy.blockSignals(True)
         self.cmbColorBy.setCurrentText("Solid Color")
         self.cmbColorBy.blockSignals(False)
 
     def _on_range_auto(self):
         self.editMin.clear(); self.editMax.clear()
-        self._on_color_by_changed()  # ri-applica con auto-range
+        self._on_color_by_changed()  # re-apply with auto-range
 
     def _on_rescale_to_data(self):
-        # Re-apply colormap chiedendo al viewer di usare data range
+        # Re-apply colormap asking the viewer to use data range
         self._on_color_by_changed()
 
     def _on_scalar_bar_toggle(self, on: bool):
@@ -901,11 +906,11 @@ class VTKImportPlugin(QtCore.QObject):
         self._on_lighting_toggle(True)
 
     # -----------------------------------------------------------------
-    # APPLY (adapter verso le API del viewer)
+    # APPLY (adapter using the viewer's API if available, else fallback)
     # -----------------------------------------------------------------
     def _apply_representation(self, ds: int, mode: str):
         """
-        Mappa delle rappresentazioni:
+        Map of representations:
         - Points, Wireframe, Surface, Surface with Edges, Volume
         """
         # Se il tuo Viewer3D espone un metodo diretto:
@@ -1180,10 +1185,10 @@ class VTKImportPlugin(QtCore.QObject):
         )
 
     # -----------------------------------------------------------------
-    # POPOLAMENTO COMBO E SYNC UI
+    # COMBO BOX "Color by" REBUILD
     # -----------------------------------------------------------------
     def _rebuild_colorby_combo(self):
-        """Legge le arrays dal PolyData/mesh corrente e popola la combo “Color by”."""
+        """Reads arrays from the current PolyData/mesh and populates the “Color by” combo box."""
         self.cmbColorBy.blockSignals(True)
         self.cmbColorBy.clear()
         self.cmbColorBy.addItem("Solid Color")
@@ -1192,7 +1197,7 @@ class VTKImportPlugin(QtCore.QObject):
             self.cmbColorBy.blockSignals(False)
             return
 
-        # Recupera arrays dal dataset originale se possibile
+        # if possible, retrieve arrays from the original dataset
         arrays_pt, arrays_cell = [], []
         try:
             recs = getattr(self.window.viewer3d, "_datasets", [])
@@ -1237,7 +1242,7 @@ class VTKImportPlugin(QtCore.QObject):
         self.cmbColorBy.blockSignals(False)
 
     def _load_ui_from_entry(self, e: dict) -> None:
-        """Carica (best effort) i controlli dai valori persistiti nel mct entry."""
+        """Load (best effort) controls from persisted values in the mct entry."""
         try: self.cmbRep.setCurrentText(e.get("representation", "Surface"))
         except Exception: pass
         try: self.cmbColorBy.setCurrentText(e.get("color_mode", "Solid Color"))
@@ -1266,7 +1271,7 @@ class VTKImportPlugin(QtCore.QObject):
     # LOGGING/UTILITY
     # -----------------------------------------------------------------
     def _msg(self, text: str, error: bool = False):
-        # Scrive nella statusbar + pannello messaggi (se disponibile)
+        # Write to status bar + message panel (if available)
         try:
             self.window.statusBar().showMessage(text, 5000)
         except Exception:
@@ -1283,7 +1288,7 @@ class VTKImportPlugin(QtCore.QObject):
 # ---------------------------------------------------------------------
 def register(window) -> object:
     """
-    Factory entry-point richiesto da `entry_point: "plugin:register"`.
-    Ritorna l'istanza del plugin.
+    Factory entry-point required by `entry_point: "plugin:register"`.
+    Returns the plugin instance.
     """
     return VTKImportPlugin(window)
