@@ -1,6 +1,41 @@
 from __future__ import annotations
 
 from PySide6 import QtWidgets
+import numpy as np
+try:
+    from scipy.spatial import cKDTree as KDTree
+except Exception:
+    KDTree = None
+
+def _ensure_surface_mesh(mesh):
+    """Return a PolyData suitable for surface rendering, extracting if needed.
+
+    For UnstructuredGrid/StructuredGrid/ImageData, uses extract_surface(pass_pointid=True)
+    so we can remap point-data to the surface using vtkOriginalPointIds.
+    """
+    try:
+        import pyvista as pv
+    except Exception:
+        return mesh
+    if mesh is None:
+        return None
+    if isinstance(mesh, pv.PolyData):
+        return mesh
+    try:
+        if hasattr(mesh, "extract_surface"):
+            surf = mesh.extract_surface(pass_pointid=True, pass_cellid=True)
+            if isinstance(surf, pv.PolyData):
+                return surf
+    except Exception:
+        pass
+    try:
+        if hasattr(mesh, "extract_geometry"):
+            geo = mesh.extract_geometry()
+            if isinstance(geo, pv.PolyData):
+                return geo
+    except Exception:
+        pass
+    return mesh
 
 
 class Viewer3DPlaceholder(QtWidgets.QFrame):
@@ -477,6 +512,297 @@ class Viewer3D(QtWidgets.QWidget):
             pass
 
     # ---- Display controls ----
+    def set_mesh_representation(self, ds: int, mode: str) -> None:
+        """Set mesh representation for dataset *ds*.
+
+        Args:
+            ds: Dataset index in the internal cache.
+            mode: One of {'Points','Wireframe','Surface','Surface with Edges'}.
+        """
+        recs = getattr(self, "_datasets", [])
+        if not (isinstance(ds, int) and 0 <= ds < len(recs)):
+            return
+        rec = recs[ds]
+        pdata = rec.get("mesh_surface") or rec.get("mesh") or rec.get("pdata") or rec.get("full_pdata")
+        if pdata is None or self.plotter is None:
+            return
+
+        rec["representation"] = mode
+
+        # Remove previous actor
+        try:
+            act = rec.get("actor") or rec.get("actor_mesh") or rec.get("actor_points")
+            if act is not None:
+                self.plotter.remove_actor(act)
+        except Exception:
+            pass
+
+        scalars = rec.get("active_scalars", None)
+        cmap = rec.get("colormap", "Viridis")
+        clim = rec.get("clim", None)
+        scalar_bar = bool(rec.get("scalar_bar", False))
+
+        style = None
+        show_edges = False
+        if mode == "Points":
+            style = "points"
+        elif mode == "Wireframe":
+            style = "wireframe"
+        elif mode == "Surface with Edges":
+            show_edges = True
+
+        try:
+            actor = self.plotter.add_mesh(
+                pdata,
+                scalars=scalars,
+                cmap=cmap,
+                clim=clim,
+                style=style,
+                show_edges=show_edges or bool(rec.get("edge_visibility", False)),
+                edge_color=tuple(rec.get("edge_color", (0, 0, 0))),
+                opacity=float(rec.get("opacity", 100)) / 100.0,
+                point_size=int(rec.get("point_size", 3)),
+                line_width=int(rec.get("line_width", 1)),
+                lighting=bool(rec.get("lighting", True)),
+                name=rec.get("name", f"ds{ds}"),
+                scalar_bar_args={"title": rec.get("active_scalar_name", "")} if scalar_bar else None,
+                copy_mesh=False,
+                reset_camera=False,
+            )
+            rec["actor"] = actor
+        except Exception:
+            return
+
+        # Solid color fallback (if no scalars)
+        if scalars is None:
+            try:
+                rgb = rec.get("solid_color", (1.0, 1.0, 1.0))
+                if all(isinstance(c, int) for c in rgb):
+                    rgb = (rgb[0]/255.0, rgb[1]/255.0, rgb[2]/255.0)
+                actor.prop.color = (float(rgb[0]), float(rgb[1]), float(rgb[2]))
+            except Exception:
+                pass
+
+        try:
+            self.plotter.render()
+        except Exception:
+            pass
+
+    def set_dataset_color(self, ds: int, r: int, g: int, b: int) -> None:
+        """Apply solid RGB color to dataset *ds* and persist.
+
+        Args:
+            ds: Dataset index.
+            r, g, b: 0..255 components.
+        """
+        recs = getattr(self, "_datasets", [])
+        if not (isinstance(ds, int) and 0 <= ds < len(recs)):
+            return
+        rec = recs[ds]
+        rec["solid_color"] = (int(r), int(g), int(b))
+        act = rec.get("actor")
+        if act is not None:
+            try:
+                act.mapper.scalar_visibility = False  # force solid
+            except Exception:
+                pass
+            try:
+                act.prop.color = (r/255.0, g/255.0, b/255.0)
+            except Exception:
+                pass
+            try:
+                self.plotter.render()
+            except Exception:
+                pass
+
+    def set_colormap(self, name: str, ds: int) -> None:
+        """Set the colormap name for dataset *ds* and refresh scalar mapping."""
+        recs = getattr(self, "_datasets", [])
+        if not (isinstance(ds, int) and 0 <= ds < len(recs)):
+            return
+        rec = recs[ds]
+        rec["colormap"] = str(name)
+        self._refresh_scalars(ds)
+
+    def set_color_mode(self, mode: str, ds: int) -> None:
+        """Set 'color mode' for dataset *ds*.
+
+        Supported modes:
+        - "Solid Color"
+        - "PointData/<ARRAY>"
+        - "CellData/<ARRAY>"  (TODO: mapping via vtkOriginalCellIds)
+        """
+        recs = getattr(self, "_datasets", [])
+        if not (isinstance(ds, int) and 0 <= ds < len(recs)):
+            return
+        rec = recs[ds]
+        rec["color_mode"] = mode
+
+        # Solid ⇒ disattiva scalars e aggiorna
+        if mode == "Solid Color":
+            rec["active_scalars"] = None
+            rec["active_scalar_name"] = ""
+            self._refresh_scalars(ds)
+            return
+
+        # Parse association/name
+        assoc = "POINT"
+        array_name = None
+        if mode.startswith("PointData/"):
+            assoc = "POINT"
+            array_name = mode.split("/", 1)[1]
+        elif mode.startswith("CellData/"):
+            assoc = "CELL"
+            array_name = mode.split("/", 1)[1]
+        else:
+            array_name = mode  # raw name, assume point
+
+        # Build scalars mapped to the render surface
+        scal = None
+        if assoc == "POINT" and array_name:
+            vmode = rec.get("vector_mode", "Magnitude")
+            scal = self._map_point_scalars_to_surface_rec(rec, array_name, vmode)
+        else:
+            # TODO: support CellData via vtkOriginalCellIds and per-face averaging if needed
+            scal = None
+
+        if scal is None:
+            # fallback to solid
+            rec["active_scalars"] = None
+            rec["active_scalar_name"] = ""
+        else:
+            rec["active_scalars"] = scal
+            rec["active_scalar_name"] = array_name
+
+        self._refresh_scalars(ds)
+
+    def _map_point_scalars_to_surface_rec(self, rec: dict, name: str, vector_mode: str = "Magnitude"):
+        """Return per-point scalars mapped to the render surface.
+
+        Priority:
+        1) rec['mesh_surface'].point_data['vtkOriginalPointIds'] → direct gather
+        2) KDTree( mesh.points ) → nearest-neighbor on surface.points
+        3) pass-through if sizes match
+        Handles vector arrays (Magnitude / X / Y / Z).
+        """
+        try:
+            mesh = rec.get("mesh_orig") or rec.get("mesh") or rec.get("pdata") or rec.get("full_pdata")
+            surf = rec.get("mesh_surface") or rec.get("mesh") or rec.get("pdata") or rec.get("full_pdata")
+            if mesh is None or surf is None:
+                return None
+
+            # fetch from original mesh (or from surface if already there)
+            if hasattr(mesh, "point_data") and name in mesh.point_data:
+                base = np.asarray(mesh.point_data[name])
+            elif hasattr(surf, "point_data") and name in surf.point_data:
+                base = np.asarray(surf.point_data[name])
+            else:
+                return None
+
+            # vector handling
+            if base.ndim == 2 and base.shape[1] in (2, 3):
+                vm = (vector_mode or "Magnitude").title()
+                if vm == "Magnitude":
+                    base = np.linalg.norm(base, axis=1)
+                else:
+                    comp = {"X": 0, "Y": 1, "Z": 2}.get(vm, 0)
+                    comp = min(comp, base.shape[1] - 1)
+                    base = base[:, comp]
+
+            # 1) mapping via OriginalPointIds
+            ids = None
+            if hasattr(surf, "point_data"):
+                for key in ("vtkOriginalPointIds", "vtkOriginalPointID", "origids", "OriginalPointIds"):
+                    if key in surf.point_data:
+                        ids = np.asarray(surf.point_data[key]).astype(np.int64)
+                        break
+            if ids is not None:
+                ids = np.clip(ids, 0, base.shape[0] - 1)
+                return base[ids]
+
+            # 2) KDTree fallback
+            if KDTree is not None and hasattr(mesh, "points") and hasattr(surf, "points"):
+                P_src = np.asarray(mesh.points)
+                P_dst = np.asarray(surf.points)
+                if P_src.size and P_dst.size:
+                    tree = KDTree(P_src)
+                    idx = tree.query(P_dst, k=1, workers=-1)[1]
+                    idx = np.clip(np.asarray(idx, dtype=np.int64), 0, base.shape[0] - 1)
+                    return base[idx]
+
+            # 3) last resort: sizes equal → pass-through
+            return base if getattr(surf, "n_points", -1) == base.shape[0] else None
+        except Exception:
+            return None
+        
+    def _refresh_scalars(self, ds: int) -> None:
+        """Internal: re-apply scalar mapping and LUT/CLIM/scalar bar to current actor."""
+        recs = getattr(self, "_datasets", [])
+        if not (isinstance(ds, int) and 0 <= ds < len(recs)):
+            return
+        rec = recs[ds]
+        act = rec.get("actor")
+        if act is None or self.plotter is None:
+            # attempt to rebuild the actor via representation
+            rep = rec.get("representation", "Surface")
+            self.set_mesh_representation(ds, rep)
+            act = rec.get("actor")
+            if act is None:
+                return
+
+        scalars = rec.get("active_scalars", None)
+        cmap = rec.get("colormap", "Viridis")
+        clim = rec.get("clim", None)
+        sbar = bool(rec.get("scalar_bar", False))
+
+        try:
+            if scalars is None:
+                act.mapper.scalar_visibility = False
+                # Apply solid color when scalar visibility is disabled
+                try:
+                    rgb = rec.get("solid_color", (1.0, 1.0, 1.0))
+                    if all(isinstance(c, int) for c in rgb):
+                        rgb = (rgb[0]/255.0, rgb[1]/255.0, rgb[2]/255.0)
+                    act.prop.color = (float(rgb[0]), float(rgb[1]), float(rgb[2]))
+                except Exception:
+                    pass
+            else:
+                pdata = rec.get("mesh_surface") or rec.get("mesh") or rec.get("pdata") or rec.get("full_pdata")
+                try:
+                    self.plotter.remove_actor(act)
+                except Exception:
+                    pass
+                act = self.plotter.add_mesh(
+                    pdata,
+                    scalars=scalars,
+                    cmap=cmap,
+                    clim=clim,
+                    style=None if rec.get("representation", "Surface") != "Wireframe" else "wireframe",
+                    show_edges=(rec.get("representation", "Surface") == "Surface with Edges") or bool(rec.get("edge_visibility", False)),
+                    edge_color=tuple(rec.get("edge_color", (0, 0, 0))),
+                    opacity=float(rec.get("opacity", 100)) / 100.0,
+                    point_size=int(rec.get("point_size", 3)),
+                    line_width=int(rec.get("line_width", 1)),
+                    lighting=bool(rec.get("lighting", True)),
+                    name=rec.get("name", f"ds{ds}"),
+                    scalar_bar_args={"title": rec.get("active_scalar_name", "")} if sbar else None,
+                    copy_mesh=False,
+                    reset_camera=False,
+                )
+                rec["actor"] = act
+                if not sbar:
+                    try:
+                        self.plotter.remove_scalar_bar()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        try:
+            self.plotter.render()
+        except Exception:
+            pass
+
     def set_point_size(self, size: int, dataset_index: int | None = None) -> None:
         """Set point size globally or for a specific dataset."""
         try:
@@ -520,205 +846,205 @@ class Viewer3D(QtWidgets.QWidget):
             except Exception:
                 pass
 
-    def set_color_mode(self, mode: str, dataset_index: int | None = None) -> None:
-        """Set color mode globally or for a specific point dataset."""
-        if dataset_index is None:
-            self._color_mode = mode
-            for idx, rec in enumerate(self._datasets):
-                if rec.get("kind") == "points":
-                    self.set_color_mode(mode, idx)
-            return
-        try:
-            rec = self._datasets[dataset_index]
-        except Exception:
-            return
-        if rec.get("kind") != "points":
-            return
-        rec["color_mode"] = mode
-        actor = rec.get("actor_points")
-        if actor is not None:
-            try:
-                self.plotter.remove_actor(actor)
-            except Exception:
-                pass
-            rec["actor_points"] = None
-        if rec.get("visible", True):
-            rec["actor_points"] = self._add_points_by_mode(
-                rec.get("pdata"),
-                rec.get("has_rgb", False),
-                rec.get("solid_color", self._solid_fallback),
-                mode,
-                rec.get("cmap", self._cmap),
-                rec.get("points_as_spheres", self._points_as_spheres),
-            )
-            actor = rec.get("actor_points")
-            if actor is not None:
-                try:
-                    prop = actor.GetProperty()
-                    if prop:
-                        prop.SetPointSize(rec.get("point_size", self._point_size))
-                except Exception:
-                    pass
-        # Auto-show a managed scalar bar when switching to colormap mode
-        try:
-            if mode == "Normal Colormap":
-                title = str(rec.get("scalar_name", "Intensity"))
-                current = str(getattr(self, "_scalarbar_mode", "horizontal-br"))
-                if current == "hidden":
-                    current = "vertical-tr"  # default sensato
-                self.set_colorbar_mode(current, title)
-        except Exception:
-            pass
-        try:
-            self._apply_scalarbar()
-        except Exception:
-            pass
-        try:
-            self.plotter.update()
-        except Exception:
-            pass
+    # def set_color_mode(self, mode: str, dataset_index: int | None = None) -> None:
+    #     """Set color mode globally or for a specific point dataset."""
+    #     if dataset_index is None:
+    #         self._color_mode = mode
+    #         for idx, rec in enumerate(self._datasets):
+    #             if rec.get("kind") == "points":
+    #                 self.set_color_mode(mode, idx)
+    #         return
+    #     try:
+    #         rec = self._datasets[dataset_index]
+    #     except Exception:
+    #         return
+    #     if rec.get("kind") != "points":
+    #         return
+    #     rec["color_mode"] = mode
+    #     actor = rec.get("actor_points")
+    #     if actor is not None:
+    #         try:
+    #             self.plotter.remove_actor(actor)
+    #         except Exception:
+    #             pass
+    #         rec["actor_points"] = None
+    #     if rec.get("visible", True):
+    #         rec["actor_points"] = self._add_points_by_mode(
+    #             rec.get("pdata"),
+    #             rec.get("has_rgb", False),
+    #             rec.get("solid_color", self._solid_fallback),
+    #             mode,
+    #             rec.get("cmap", self._cmap),
+    #             rec.get("points_as_spheres", self._points_as_spheres),
+    #         )
+    #         actor = rec.get("actor_points")
+    #         if actor is not None:
+    #             try:
+    #                 prop = actor.GetProperty()
+    #                 if prop:
+    #                     prop.SetPointSize(rec.get("point_size", self._point_size))
+    #             except Exception:
+    #                 pass
+    #     # Auto-show a managed scalar bar when switching to colormap mode
+    #     try:
+    #         if mode == "Normal Colormap":
+    #             title = str(rec.get("scalar_name", "Intensity"))
+    #             current = str(getattr(self, "_scalarbar_mode", "horizontal-br"))
+    #             if current == "hidden":
+    #                 current = "vertical-tr"  # default sensato
+    #             self.set_colorbar_mode(current, title)
+    #     except Exception:
+    #         pass
+    #     try:
+    #         self._apply_scalarbar()
+    #     except Exception:
+    #         pass
+    #     try:
+    #         self.plotter.update()
+    #     except Exception:
+    #         pass
 
     def set_solid_color(self, r: int, g: int, b: int) -> None:
         """Set a solid RGB color on all actors (best-effort)."""
         self._solid_color = (r, g, b)
         self._refresh_datasets()
 
-    def set_colormap(self, name: str, dataset_index: int | None = None) -> None:
-        """Set colormap globally or for a specific dataset when in colormap mode."""
-        if dataset_index is None:
-            self._cmap = name
-            for idx, rec in enumerate(self._datasets):
-                if rec.get("kind") == "points":
-                    self.set_colormap(name, idx)
-            return
-        try:
-            rec = self._datasets[dataset_index]
-        except Exception:
-            return
-        if rec.get("kind") != "points":
-            return
-        rec["cmap"] = name
-        if rec.get("color_mode", self._color_mode) != "Normal Colormap" and rec.get("has_rgb", False):
-            return
-        actor = rec.get("actor_points")
-        if actor is not None:
-            try:
-                self.plotter.remove_actor(actor)
-            except Exception:
-                pass
-        rec["actor_points"] = None
-        if rec.get("visible", True):
-            rec["actor_points"] = self._add_points_by_mode(
-                rec.get("pdata"),
-                rec.get("has_rgb", False),
-                rec.get("solid_color", self._solid_fallback),
-                rec.get("color_mode", self._color_mode),
-                name,
-                rec.get("points_as_spheres", self._points_as_spheres),
-            )
-            actor = rec.get("actor_points")
-            if actor is not None:
-                try:
-                    prop = actor.GetProperty()
-                    if prop:
-                        prop.SetPointSize(rec.get("point_size", self._point_size))
-                except Exception:
-                    pass
-        # Ensure the scalar bar is shown with the correct title in colormap mode
-        try:
-            if rec.get("color_mode", self._color_mode) == "Normal Colormap":
-                title = str(rec.get("scalar_name", "Intensity"))
-                current = str(getattr(self, "_scalarbar_mode", "horizontal-br"))
-                if current == "hidden":
-                    current = "vertical-tr"
-                self.set_colorbar_mode(current, title)
-        except Exception:
-            pass
-        try:
-            self._apply_scalarbar()
-        except Exception:
-            pass
-        try:
-            self.plotter.update()
-        except Exception:
-            pass
+    # def set_colormap(self, name: str, dataset_index: int | None = None) -> None:
+    #     """Set colormap globally or for a specific dataset when in colormap mode."""
+    #     if dataset_index is None:
+    #         self._cmap = name
+    #         for idx, rec in enumerate(self._datasets):
+    #             if rec.get("kind") == "points":
+    #                 self.set_colormap(name, idx)
+    #         return
+    #     try:
+    #         rec = self._datasets[dataset_index]
+    #     except Exception:
+    #         return
+    #     if rec.get("kind") != "points":
+    #         return
+    #     rec["cmap"] = name
+    #     if rec.get("color_mode", self._color_mode) != "Normal Colormap" and rec.get("has_rgb", False):
+    #         return
+    #     actor = rec.get("actor_points")
+    #     if actor is not None:
+    #         try:
+    #             self.plotter.remove_actor(actor)
+    #         except Exception:
+    #             pass
+    #     rec["actor_points"] = None
+    #     if rec.get("visible", True):
+    #         rec["actor_points"] = self._add_points_by_mode(
+    #             rec.get("pdata"),
+    #             rec.get("has_rgb", False),
+    #             rec.get("solid_color", self._solid_fallback),
+    #             rec.get("color_mode", self._color_mode),
+    #             name,
+    #             rec.get("points_as_spheres", self._points_as_spheres),
+    #         )
+    #         actor = rec.get("actor_points")
+    #         if actor is not None:
+    #             try:
+    #                 prop = actor.GetProperty()
+    #                 if prop:
+    #                     prop.SetPointSize(rec.get("point_size", self._point_size))
+    #             except Exception:
+    #                 pass
+    #     # Ensure the scalar bar is shown with the correct title in colormap mode
+    #     try:
+    #         if rec.get("color_mode", self._color_mode) == "Normal Colormap":
+    #             title = str(rec.get("scalar_name", "Intensity"))
+    #             current = str(getattr(self, "_scalarbar_mode", "horizontal-br"))
+    #             if current == "hidden":
+    #                 current = "vertical-tr"
+    #             self.set_colorbar_mode(current, title)
+    #     except Exception:
+    #         pass
+    #     try:
+    #         self._apply_scalarbar()
+    #     except Exception:
+    #         pass
+    #     try:
+    #         self.plotter.update()
+    #     except Exception:
+    #         pass
 
-    def set_dataset_color(self, dataset_index: int, r: int, g: int, b: int) -> None:
-        """Set per-dataset solid color and update its actor if needed.
+    # def set_dataset_color(self, dataset_index: int, r: int, g: int, b: int) -> None:
+    #     """Set per-dataset solid color and update its actor if needed.
 
-        Works for both point clouds and meshes. For points, if the dataset's
-        current color mode is Solid, the actor color is updated directly;
-        otherwise the actor is rebuilt only when needed.
-        """
-        try:
-            rec = self._datasets[dataset_index]
-        except Exception:
-            return
+    #     Works for both point clouds and meshes. For points, if the dataset's
+    #     current color mode is Solid, the actor color is updated directly;
+    #     otherwise the actor is rebuilt only when needed.
+    #     """
+    #     try:
+    #         rec = self._datasets[dataset_index]
+    #     except Exception:
+    #         return
 
-        # Clamp and normalize to 0..1
-        rgb = (
-            max(0, min(255, int(r))) / 255.0,
-            max(0, min(255, int(g))) / 255.0,
-            max(0, min(255, int(b))) / 255.0,
-        )
-        rec["solid_color"] = rgb
+    #     # Clamp and normalize to 0..1
+    #     rgb = (
+    #         max(0, min(255, int(r))) / 255.0,
+    #         max(0, min(255, int(g))) / 255.0,
+    #         max(0, min(255, int(b))) / 255.0,
+    #     )
+    #     rec["solid_color"] = rgb
 
-        # Mesh datasets: update actor property if present
-        if rec.get("kind") == "mesh":
-            actor_m = rec.get("actor_mesh")
-            if actor_m is not None:
-                try:
-                    actor_m.GetProperty().SetColor(rgb)
-                    self.plotter.update()
-                except Exception:
-                    pass
-            return
+    #     # Mesh datasets: update actor property if present
+    #     if rec.get("kind") == "mesh":
+    #         actor_m = rec.get("actor_mesh")
+    #         if actor_m is not None:
+    #             try:
+    #                 actor_m.GetProperty().SetColor(rgb)
+    #                 self.plotter.update()
+    #             except Exception:
+    #                 pass
+    #         return
 
-        # Point datasets
-        if rec.get("kind") != "points":
-            return
+    #     # Point datasets
+    #     if rec.get("kind") != "points":
+    #         return
 
-        mode = str(rec.get("color_mode", self._color_mode))
-        actor = rec.get("actor_points")
+    #     mode = str(rec.get("color_mode", self._color_mode))
+    #     actor = rec.get("actor_points")
 
-        # If currently in Solid mode and an actor exists, update in-place
-        if actor is not None and mode == "Solid":
-            try:
-                actor.GetProperty().SetColor(rgb)
-                self.plotter.update()
-                return
-            except Exception:
-                pass
+    #     # If currently in Solid mode and an actor exists, update in-place
+    #     if actor is not None and mode == "Solid":
+    #         try:
+    #             actor.GetProperty().SetColor(rgb)
+    #             self.plotter.update()
+    #             return
+    #         except Exception:
+    #             pass
 
-        # Otherwise, rebuild only if visible (to reflect future switch to Solid)
-        if actor is not None:
-            try:
-                self.plotter.remove_actor(actor)
-            except Exception:
-                pass
-            rec["actor_points"] = None
+    #     # Otherwise, rebuild only if visible (to reflect future switch to Solid)
+    #     if actor is not None:
+    #         try:
+    #             self.plotter.remove_actor(actor)
+    #         except Exception:
+    #             pass
+    #         rec["actor_points"] = None
 
-        if rec.get("visible", True):
-            new_actor = self._add_points_by_mode(
-                rec.get("pdata"),
-                rec.get("has_rgb", False),
-                rec.get("solid_color", self._solid_fallback),
-                rec.get("color_mode", self._color_mode),
-                rec.get("cmap", self._cmap),
-                rec.get("points_as_spheres", self._points_as_spheres),
-            )
-            if new_actor is not None:
-                try:
-                    prop = new_actor.GetProperty()
-                    if prop:
-                        prop.SetPointSize(rec.get("point_size", self._point_size))
-                except Exception:
-                    pass
-            rec["actor_points"] = new_actor
-            try:
-                self.plotter.update()
-            except Exception:
-                pass
+    #     if rec.get("visible", True):
+    #         new_actor = self._add_points_by_mode(
+    #             rec.get("pdata"),
+    #             rec.get("has_rgb", False),
+    #             rec.get("solid_color", self._solid_fallback),
+    #             rec.get("color_mode", self._color_mode),
+    #             rec.get("cmap", self._cmap),
+    #             rec.get("points_as_spheres", self._points_as_spheres),
+    #         )
+    #         if new_actor is not None:
+    #             try:
+    #                 prop = new_actor.GetProperty()
+    #                 if prop:
+    #                     prop.SetPointSize(rec.get("point_size", self._point_size))
+    #             except Exception:
+    #                 pass
+    #         rec["actor_points"] = new_actor
+    #         try:
+    #             self.plotter.update()
+    #         except Exception:
+    #             pass
 
     def set_points_as_spheres(self, enabled: bool) -> None:
         """Toggle rendering style for points and refresh existing actors."""
@@ -1054,20 +1380,42 @@ class Viewer3D(QtWidgets.QWidget):
             pass
 
     def add_pyvista_mesh(self, mesh) -> int:
-        """Add a PyVista mesh (PolyData) to the scene."""
+        """Add a VTK/PyVista mesh to the scene with a guaranteed surface actor.
+
+        Stores both:
+        - rec['mesh_orig']    : the original dataset (e.g. UnstructuredGrid)
+        - rec['mesh_surface'] : a PolyData surface extracted for rendering
+
+        All visual representations use the surface, so scalars and edges behave.
+        """
         try:
-            actor = self._add_mesh_no_bar(mesh)
+            render_mesh = _ensure_surface_mesh(mesh)
+            actor = self._add_mesh_no_bar(render_mesh)
             rec = {
                 "kind": "mesh",
-                "mesh": mesh,
-                "actor_mesh": actor,
+                "mesh_orig": mesh,
+                "mesh_surface": render_mesh,
+                "actor": actor,
                 "visible": True,
-                "representation": "surface",
+                "representation": "Surface",
                 "opacity": 100,
                 "solid_color": (1.0, 1.0, 1.0),
+                "active_scalars": None,
+                "active_scalar_name": "",
+                "colormap": "Viridis",
+                "clim": None,
+                "scalar_bar": False,
+                "edge_visibility": False,
+                "edge_color": (0, 0, 0),
+                "point_size": 3,
+                "line_width": 1,
+                "lighting": True,
             }
             self._datasets.append(rec)
-            self.plotter.reset_camera()
+            try:
+                self.plotter.reset_camera()
+            except Exception:
+                pass
             return len(self._datasets) - 1
         except Exception:
             return -1
@@ -1587,28 +1935,6 @@ class Viewer3D(QtWidgets.QWidget):
                     else "surface",
                     opacity=float(rec.get("opacity", 100)) / 100.0,
                 )
-                self.plotter.update()
-            except Exception:
-                pass
-
-    def set_mesh_representation(self, dataset_index: int, mode: str) -> None:
-        """Change mesh rendering style (surface or wireframe)."""
-        try:
-            rec = self._datasets[dataset_index]
-        except Exception:
-            return
-        if rec.get("kind") != "mesh":
-            return
-        rec["representation"] = mode.lower()
-        actor = rec.get("actor_mesh")
-        if actor is not None:
-            try:
-                prop = actor.GetProperty()
-                if prop:
-                    if rec["representation"] == "wireframe":
-                        prop.SetRepresentationToWireframe()
-                    else:
-                        prop.SetRepresentationToSurface()
                 self.plotter.update()
             except Exception:
                 pass

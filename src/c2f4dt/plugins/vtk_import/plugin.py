@@ -32,7 +32,26 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 # PyVista è una dipendenza dichiarata in plugin.yaml
 import pyvista as pv
+import numpy as np
 
+
+# Optionally import KDTree for mapping
+try:
+    from scipy.spatial import cKDTree as KDTree
+except Exception:
+    KDTree = None
+
+# ---------------------------------------------------------------------
+# Colormap normalization helper
+# ---------------------------------------------------------------------
+def _normalize_cmap(name: str, invert: bool) -> str:
+    """Return a matplotlib-compatible colormap name (lowercase) and reverse if requested."""
+    if not isinstance(name, str):
+        return "viridis_r" if invert else "viridis"
+    cm = name.strip().lower() or "viridis"
+    if invert and not cm.endswith("_r"):
+        cm = cm + "_r"
+    return cm
 
 # ---------------------------------------------------------------------
 # Helpers UI
@@ -75,6 +94,273 @@ def _solid_color_button() -> QtWidgets.QPushButton:
     btn.setObjectName("btnVTKSolidColor")
     return btn
 
+# ---------------------------------------------------------------------
+# Surface/array helpers for fallback rendering
+# ---------------------------------------------------------------------
+def _prefer_surface(rec: dict):
+    """Return the renderable surface if present, else the best available dataset."""
+    return rec.get("mesh_surface") or rec.get("pdata") or rec.get("full_pdata") or rec.get("mesh")
+
+def _map_point_scalars_to_surface(window, rec: dict, name: str, vector_mode: str = "Magnitude"):
+    """Map a point array from the original dataset to the surface, using vtkOriginalPointIds or KDTree as fallback.
+
+    Args:
+        window: Main window (unused, kept for symmetry/future logging).
+        rec: Viewer dataset record.
+        name: PointData array name to map.
+        vector_mode: One of {'Magnitude', 'X', 'Y', 'Z'} when the array is vector-like.
+
+    Returns:
+        A numpy array with one scalar per surface point, or None if mapping fails.
+    """
+    try:
+        import numpy as _np
+        mesh = rec.get("mesh_orig") or rec.get("mesh") or rec.get("pdata") or rec.get("full_pdata")
+        surf = rec.get("mesh_surface") or rec.get("pdata") or rec.get("full_pdata") or rec.get("mesh")
+        if mesh is None or surf is None:
+            return None
+
+        # Find source array
+        if hasattr(mesh, "point_data") and name in mesh.point_data:
+            base = _np.asarray(mesh.point_data[name])
+        elif hasattr(surf, "point_data") and name in surf.point_data:
+            base = _np.asarray(surf.point_data[name])
+        else:
+            return None
+
+        # Vector handling
+        if base.ndim == 2 and base.shape[1] in (2, 3):
+            vm = (vector_mode or "Magnitude").title()
+            if vm == "Magnitude":
+                base = _np.linalg.norm(base, axis=1)
+            else:
+                comp = {"X": 0, "Y": 1, "Z": 2}.get(vm, 0)
+                comp = min(comp, base.shape[1] - 1)
+                base = base[:, comp]
+
+        # Try OriginalPointIds mapping
+        ids = None
+        if hasattr(surf, "point_data"):
+            for key in ("vtkOriginalPointIds", "vtkOriginalPointID", "origids", "OriginalPointIds"):
+                if key in surf.point_data:
+                    ids = _np.asarray(surf.point_data[key]).astype(_np.int64)
+                    break
+        if ids is not None:
+            ids = _np.clip(ids, 0, base.shape[0] - 1)
+            return base[ids]
+
+        # KDTree fallback
+        if KDTree is not None and hasattr(mesh, "points") and hasattr(surf, "points"):
+            P_src = _np.asarray(mesh.points)
+            P_dst = _np.asarray(surf.points)
+            if P_src.size and P_dst.size:
+                tree = KDTree(P_src)
+                idx = tree.query(P_dst, k=1, workers=-1)[1]
+                idx = _np.clip(_np.asarray(idx, dtype=_np.int64), 0, base.shape[0] - 1)
+                return base[idx]
+
+        # Last resort: if sizes match, pass-through
+        return base if getattr(surf, "n_points", -1) == base.shape[0] else None
+    except Exception:
+        return None
+
+# ---------------------------------------------------------------------
+# Internal fallbacks (direct PyVista control)
+# ---------------------------------------------------------------------
+def _get_dataset_record(window, ds: int) -> dict | None:
+    """
+    Return the viewer's dataset record if available.
+    Tries to access `window.viewer3d._datasets[ds]` which is expected to be a dict
+    containing at least a `mesh`/`pdata` (pyvista object) and an `actor` (pyvista Actor).
+    """
+    try:
+        recs = getattr(window.viewer3d, "_datasets", [])
+        if isinstance(recs, list) and 0 <= ds < len(recs):
+            return recs[ds]
+        if isinstance(recs, dict):
+            return recs.get(ds)
+    except Exception:
+        pass
+    return None
+
+
+def _fallback_render(window, e: dict, ds: int, *,
+                     representation: str | None = None,
+                     color_mode: str | None = None,
+                     solid_color: tuple[int, int, int] | None = None,
+                     lut: str | None = None,
+                     invert: bool | None = None,
+                     scalar_bar: bool | None = None,
+                     edge_visibility: bool | None = None,
+                     edge_color: tuple[int, int, int] | None = None,
+                     opacity: int | None = None,
+                     point_size: int | None = None,
+                     line_width: int | None = None,
+                     lighting: bool | None = None,
+                     manual_range: tuple[float, float] | None = None,
+                     vector_mode: str | None = None) -> None:
+    """
+    Re-render the dataset using PyVista directly when Viewer3D API is missing.
+
+    Strategy:
+      - Remove the existing actor (if any)
+      - Re-add mesh (or volume) with updated styling
+      - Update the viewer record's actor reference
+    """
+    rec = _get_dataset_record(window, ds)
+    if rec is None:
+        return
+
+    # Pull current state (with overrides)
+    rep = representation if representation is not None else e.get("representation", "Surface")
+    colmode = color_mode if color_mode is not None else e.get("color_mode", "Solid Color")
+    lut = lut if lut is not None else e.get("colormap", "Viridis")
+    invert = bool(invert if invert is not None else e.get("invert_lut", False))
+    scalar_bar = bool(scalar_bar if scalar_bar is not None else e.get("scalar_bar", False))
+    edge_visibility = bool(edge_visibility if edge_visibility is not None else e.get("edge_visibility", False))
+    edge_color = edge_color if edge_color is not None else tuple(e.get("edge_color", (0, 0, 0)))
+    opacity = int(opacity if opacity is not None else e.get("opacity", 100))
+    point_size = int(point_size if point_size is not None else e.get("point_size", 3))
+    line_width = int(line_width if line_width is not None else e.get("line_width", 1))
+    lighting = bool(lighting if lighting is not None else e.get("lighting", True))
+    solid_color = solid_color if solid_color is not None else tuple(e.get("solid_color", (255, 255, 255)))
+    vector_mode = vector_mode if vector_mode is not None else e.get("vector_mode", "Magnitude")
+
+    plotter = getattr(window.viewer3d, "plotter", None)
+    if plotter is None:
+        return
+
+    pdata = _prefer_surface(rec)
+    if pdata is None:
+        return
+
+    # Remove old actor
+    try:
+        if rec.get("actor") is not None:
+            plotter.remove_actor(rec["actor"])
+    except Exception:
+        pass
+
+    # Representation
+    style = None
+    show_edges = False
+    if rep == "Points":
+        style = "points"
+    elif rep == "Wireframe":
+        style = "wireframe"
+    elif rep == "Surface with Edges":
+        style = None
+        show_edges = True
+    elif rep == "Surface":
+        style = None
+
+    # Scalars (Solid vs Array), with mapping for PointData → surface
+    scalars = None
+    clim = None
+    if colmode == "Solid Color":
+        scalars = None
+    else:
+        assoc = "POINT"
+        array_name = colmode
+        if colmode.startswith("PointData/"):
+            assoc = "POINT"
+            array_name = colmode.split("/", 1)[1]
+        elif colmode.startswith("CellData/"):
+            assoc = "CELL"
+            array_name = colmode.split("/", 1)[1]
+
+        if assoc == "POINT":
+            # Map source point array to surface points (Magnitude / component)
+            scalars = _map_point_scalars_to_surface(window, rec, array_name, vector_mode)
+        else:
+            # TODO: add CellData mapping via vtkOriginalCellIds if needed
+            try:
+                arr = pdata.cell_data.get(array_name)
+            except Exception:
+                arr = None
+            if isinstance(arr, np.ndarray) and arr.ndim == 2 and arr.shape[1] in (2, 3):
+                comp_map = {"X": 0, "Y": 1, "Z": 2}
+                comp = comp_map.get(vector_mode or "Magnitude", None)
+                if comp is None:
+                    scalars = np.linalg.norm(arr, axis=1)
+                else:
+                    scalars = arr[:, comp if comp < arr.shape[1] else 0]
+            else:
+                scalars = array_name if arr is not None else None
+
+        # Ensure numpy arrays are float64 and contiguous for VTK mapper
+        if isinstance(scalars, np.ndarray):
+            scalars = np.ascontiguousarray(scalars, dtype=np.float64)
+
+        if manual_range is not None:
+            clim = manual_range
+        elif isinstance(scalars, np.ndarray):
+            # Auto CLIM from data if we computed an array
+            _min = float(np.nanmin(scalars)) if scalars.size else 0.0
+            _max = float(np.nanmax(scalars)) if scalars.size else 1.0
+            if _max == _min:
+                _max = _min + 1e-9
+            clim = (_min, _max)
+
+    # Normalize LUT name and inversion
+    cmap = _normalize_cmap(lut, bool(invert))
+
+    # Opacity: 0–100 ➜ 0–1
+    op_f = max(0.0, min(1.0, opacity / 100.0))
+
+    # Volume path (only for image-like grids)
+    actor = None
+    try:
+        if rep == "Volume" and hasattr(pdata, "dimensions"):
+            actor = plotter.add_volume(
+                pdata,
+                scalars=scalars,
+                cmap=cmap,
+                clim=clim,
+                opacity=op_f,
+                name=e.get("name", "dataset"),
+            )
+        else:
+            actor = plotter.add_mesh(
+                pdata,
+                scalars=scalars,
+                cmap=cmap,
+                clim=clim,
+                style=style,
+                show_edges=show_edges or edge_visibility,
+                edge_color=edge_color,
+                lighting=lighting,
+                opacity=op_f,
+                line_width=line_width,
+                point_size=point_size,
+                name=e.get("name", "dataset"),
+                scalar_bar_args={"title": ""} if scalar_bar else None,
+                copy_mesh=False,
+                reset_camera=False,
+            )
+            if colmode == "Solid Color" and actor is not None:
+                try:
+                    actor.prop.color = tuple([c / 255.0 for c in solid_color])
+                except Exception:
+                    pass
+    except Exception:
+        return
+
+    try:
+        if not scalar_bar:
+            plotter.remove_scalar_bar(title=None)
+    except Exception:
+        pass
+
+    try:
+        rec["actor"] = actor
+    except Exception:
+        pass
+
+    try:
+        plotter.render()
+    except Exception:
+        pass
 
 # ---------------------------------------------------------------------
 # Plugin principale
@@ -514,6 +800,8 @@ class VTKImportPlugin(QtCore.QObject):
 
         self._save_to_mct("color_mode", label)
         self._save_to_mct("colormap", lut)
+        self._save_to_mct("invert_lut", bool(invert))
+        self._save_to_mct("vector_mode", vec_mode)
 
     def _on_pick_solid_color(self):
         col = QtWidgets.QColorDialog.getColor(parent=self.window, title="Solid Color")
@@ -625,14 +913,48 @@ class VTKImportPlugin(QtCore.QObject):
         if callable(fn):
             fn(ds, mode)
             return
-        # TODO: fallback diretto su actor (non necessario se hai l’API)
+        # Fallback: re-render via PyVista
+        e = self._current_mct() or {}
+        _fallback_render(
+            self.window, e, ds,
+            representation=mode,
+            manual_range=self._manual_range_or_none(),
+            color_mode=e.get("color_mode", "Solid Color"),
+            lut=e.get("colormap", "Viridis"),
+            invert=self.chkInvertLUT.isChecked(),
+            scalar_bar=self.chkScalarBar.isChecked(),
+            edge_visibility=self.chkEdges.isChecked(),
+            edge_color=e.get("edge_color", (0, 0, 0)),
+            opacity=self.sldOpacity.value(),
+            point_size=self.sldPointSize.value(),
+            line_width=self.sldLineWidth.value(),
+            lighting=self.chkLighting.isChecked(),
+            vector_mode=self.cmbVectorMode.currentText(),
+        )
 
     def _apply_solid_color(self, ds: int, rgb: Tuple[int, int, int]):
         fn = getattr(self.window.viewer3d, "set_dataset_color", None)
         if callable(fn):
             fn(ds, *rgb)
             return
-        # TODO: fallback
+        e = self._current_mct() or {}
+        _fallback_render(
+            self.window, e, ds,
+            color_mode="Solid Color",
+            solid_color=rgb,
+            representation=e.get("representation", "Surface"),
+            lut=e.get("colormap", "Viridis"),
+            invert=self.chkInvertLUT.isChecked(),
+            scalar_bar=self.chkScalarBar.isChecked(),
+            edge_visibility=self.chkEdges.isChecked(),
+            edge_color=e.get("edge_color", (0, 0, 0)),
+            opacity=self.sldOpacity.value(),
+            point_size=self.sldPointSize.value(),
+            line_width=self.sldLineWidth.value(),
+            lighting=self.chkLighting.isChecked(),
+            manual_range=self._manual_range_or_none(),
+            vector_mode=self.cmbVectorMode.currentText(),
+        )
 
     def _apply_coloring(self, ds: int, label: str, vec_mode: str, lut: str, invert: bool):
         """
@@ -668,7 +990,23 @@ class VTKImportPlugin(QtCore.QObject):
             fn(ds, array_name, assoc, component, lut, bool(invert), rng)
             return
 
-        # TODO: fallback generico su actor
+        e = self._current_mct() or {}
+        _fallback_render(
+            self.window, e, ds,
+            color_mode=label,
+            lut=lut,
+            invert=bool(invert),
+            representation=e.get("representation", "Surface"),
+            scalar_bar=self.chkScalarBar.isChecked(),
+            edge_visibility=self.chkEdges.isChecked(),
+            edge_color=e.get("edge_color", (0, 0, 0)),
+            opacity=self.sldOpacity.value(),
+            point_size=self.sldPointSize.value(),
+            line_width=self.sldLineWidth.value(),
+            lighting=self.chkLighting.isChecked(),
+            manual_range=self._manual_range_or_none(),
+            vector_mode=self.cmbVectorMode.currentText(),
+        )
 
     def _manual_range_or_none(self) -> Optional[Tuple[float, float]]:
         try:
@@ -685,49 +1023,161 @@ class VTKImportPlugin(QtCore.QObject):
         if callable(fn):
             fn(ds, bool(show))
             return
-        # TODO: fallback
+        e = self._current_mct() or {}
+        _fallback_render(
+            self.window, e, ds,
+            scalar_bar=bool(show),
+            representation=e.get("representation", "Surface"),
+            color_mode=e.get("color_mode", "Solid Color"),
+            lut=e.get("colormap", "Viridis"),
+            invert=self.chkInvertLUT.isChecked(),
+            edge_visibility=self.chkEdges.isChecked(),
+            edge_color=e.get("edge_color", (0, 0, 0)),
+            opacity=self.sldOpacity.value(),
+            point_size=self.sldPointSize.value(),
+            line_width=self.sldLineWidth.value(),
+            lighting=self.chkLighting.isChecked(),
+            manual_range=self._manual_range_or_none(),
+            vector_mode=self.cmbVectorMode.currentText(),
+        )
 
     def _apply_opacity(self, ds: int, val: int):
         fn = getattr(self.window.viewer3d, "set_mesh_opacity", None)
         if callable(fn):
             fn(ds, int(val))
             return
-        # TODO: fallback
+        e = self._current_mct() or {}
+        _fallback_render(
+            self.window, e, ds,
+            opacity=int(val),
+            representation=e.get("representation", "Surface"),
+            color_mode=e.get("color_mode", "Solid Color"),
+            lut=e.get("colormap", "Viridis"),
+            invert=self.chkInvertLUT.isChecked(),
+            scalar_bar=self.chkScalarBar.isChecked(),
+            edge_visibility=self.chkEdges.isChecked(),
+            edge_color=e.get("edge_color", (0, 0, 0)),
+            point_size=self.sldPointSize.value(),
+            line_width=self.sldLineWidth.value(),
+            lighting=self.chkLighting.isChecked(),
+            manual_range=self._manual_range_or_none(),
+            vector_mode=self.cmbVectorMode.currentText(),
+        )
 
     def _apply_point_size(self, ds: int, val: int):
         fn = getattr(self.window.viewer3d, "set_point_size", None)
         if callable(fn):
             fn(int(val), ds)
             return
-        # TODO: fallback
+        e = self._current_mct() or {}
+        _fallback_render(
+            self.window, e, ds,
+            point_size=int(val),
+            representation=e.get("representation", "Surface"),
+            color_mode=e.get("color_mode", "Solid Color"),
+            lut=e.get("colormap", "Viridis"),
+            invert=self.chkInvertLUT.isChecked(),
+            scalar_bar=self.chkScalarBar.isChecked(),
+            edge_visibility=self.chkEdges.isChecked(),
+            edge_color=e.get("edge_color", (0, 0, 0)),
+            opacity=self.sldOpacity.value(),
+            line_width=self.sldLineWidth.value(),
+            lighting=self.chkLighting.isChecked(),
+            manual_range=self._manual_range_or_none(),
+            vector_mode=self.cmbVectorMode.currentText(),
+        )
 
     def _apply_line_width(self, ds: int, val: int):
         fn = getattr(self.window.viewer3d, "set_line_width", None)
         if callable(fn):
             fn(ds, int(val))
             return
-        # TODO: fallback
+        e = self._current_mct() or {}
+        _fallback_render(
+            self.window, e, ds,
+            line_width=int(val),
+            representation=e.get("representation", "Surface"),
+            color_mode=e.get("color_mode", "Solid Color"),
+            lut=e.get("colormap", "Viridis"),
+            invert=self.chkInvertLUT.isChecked(),
+            scalar_bar=self.chkScalarBar.isChecked(),
+            edge_visibility=self.chkEdges.isChecked(),
+            edge_color=e.get("edge_color", (0, 0, 0)),
+            opacity=self.sldOpacity.value(),
+            point_size=self.sldPointSize.value(),
+            lighting=self.chkLighting.isChecked(),
+            manual_range=self._manual_range_or_none(),
+            vector_mode=self.cmbVectorMode.currentText(),
+        )
 
     def _apply_edges(self, ds: int, on: bool):
         fn = getattr(self.window.viewer3d, "set_edge_visibility", None)
         if callable(fn):
             fn(ds, bool(on))
             return
-        # TODO: fallback
+        e = self._current_mct() or {}
+        _fallback_render(
+            self.window, e, ds,
+            edge_visibility=bool(on),
+            representation=e.get("representation", "Surface"),
+            color_mode=e.get("color_mode", "Solid Color"),
+            lut=e.get("colormap", "Viridis"),
+            invert=self.chkInvertLUT.isChecked(),
+            scalar_bar=self.chkScalarBar.isChecked(),
+            edge_color=e.get("edge_color", (0, 0, 0)),
+            opacity=self.sldOpacity.value(),
+            point_size=self.sldPointSize.value(),
+            line_width=self.sldLineWidth.value(),
+            lighting=self.chkLighting.isChecked(),
+            manual_range=self._manual_range_or_none(),
+            vector_mode=self.cmbVectorMode.currentText(),
+        )
 
     def _apply_edge_color(self, ds: int, rgb: Tuple[int, int, int]):
         fn = getattr(self.window.viewer3d, "set_edge_color", None)
         if callable(fn):
             fn(ds, *rgb)
             return
-        # TODO: fallback
+        e = self._current_mct() or {}
+        _fallback_render(
+            self.window, e, ds,
+            edge_color=rgb,
+            representation=e.get("representation", "Surface"),
+            color_mode=e.get("color_mode", "Solid Color"),
+            lut=e.get("colormap", "Viridis"),
+            invert=self.chkInvertLUT.isChecked(),
+            scalar_bar=self.chkScalarBar.isChecked(),
+            edge_visibility=self.chkEdges.isChecked(),
+            opacity=self.sldOpacity.value(),
+            point_size=self.sldPointSize.value(),
+            line_width=self.sldLineWidth.value(),
+            lighting=self.chkLighting.isChecked(),
+            manual_range=self._manual_range_or_none(),
+            vector_mode=self.cmbVectorMode.currentText(),
+        )
 
     def _apply_lighting(self, ds: int, on: bool):
         fn = getattr(self.window.viewer3d, "set_lighting_enabled", None)
         if callable(fn):
             fn(ds, bool(on))
             return
-        # TODO: fallback
+        e = self._current_mct() or {}
+        _fallback_render(
+            self.window, e, ds,
+            lighting=bool(on),
+            representation=e.get("representation", "Surface"),
+            color_mode=e.get("color_mode", "Solid Color"),
+            lut=e.get("colormap", "Viridis"),
+            invert=self.chkInvertLUT.isChecked(),
+            scalar_bar=self.chkScalarBar.isChecked(),
+            edge_visibility=self.chkEdges.isChecked(),
+            edge_color=e.get("edge_color", (0, 0, 0)),
+            opacity=self.sldOpacity.value(),
+            point_size=self.sldPointSize.value(),
+            line_width=self.sldLineWidth.value(),
+            manual_range=self._manual_range_or_none(),
+            vector_mode=self.cmbVectorMode.currentText(),
+        )
 
     # -----------------------------------------------------------------
     # POPOLAMENTO COMBO E SYNC UI
@@ -742,24 +1192,33 @@ class VTKImportPlugin(QtCore.QObject):
             self.cmbColorBy.blockSignals(False)
             return
 
-        # Recupera pdata dal viewer
+        # Recupera arrays dal dataset originale se possibile
         arrays_pt, arrays_cell = [], []
         try:
             recs = getattr(self.window.viewer3d, "_datasets", [])
             rec = recs[ds]
-            pdata = rec.get("pdata") or rec.get("full_pdata") or rec.get("mesh")
-            if pdata is not None:
+            # Prefer original dataset for listing arrays (more complete), fall back to surface
+            pdata = rec.get("mesh_orig") or rec.get("mesh") or rec.get("pdata") or rec.get("full_pdata")
+            surf = rec.get("mesh_surface") or rec.get("mesh") or rec.get("pdata") or rec.get("full_pdata")
+            target = pdata or surf
+            if isinstance(target, pv.MultiBlock):
+                try:
+                    target = target[0]
+                except Exception:
+                    target = None
+                rec["mesh"] = target
+            if target is not None:
                 # PointData
                 try:
-                    for name in list(pdata.point_data.keys()):
-                        if str(name).startswith("vtkOriginal"):  # nascondi array tecniche
+                    for name in list(target.point_data.keys()):
+                        if str(name).startswith("vtkOriginal"):
                             continue
                         arrays_pt.append(str(name))
                 except Exception:
                     pass
                 # CellData
                 try:
-                    for name in list(pdata.cell_data.keys()):
+                    for name in list(target.cell_data.keys()):
                         if str(name).startswith("vtkOriginal"):
                             continue
                         arrays_cell.append(str(name))

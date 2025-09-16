@@ -1,0 +1,58 @@
+{
+  "input": "Garisenda_C3D8_triangular_mesh_U.vtk",
+  "outdir": "_vtk_report",
+  "dataset_type": "UnstructuredGrid",
+  "n_points": 148559,
+  "n_cells": 54572,
+  "point_arrays": [
+    "displacement"
+  ],
+  "cell_arrays": [],
+  "screenshots": [
+    "_vtk_report/00_baseline.png",
+    "_vtk_report/rep_Points.png",
+    "_vtk_report/rep_Wireframe.png",
+    "_vtk_report/rep_Surface.png",
+    "_vtk_report/rep_Surface_with_Edges.png",
+    "_vtk_report/solid_color.png",
+    "_vtk_report/solid_with_edges.png",
+    "_vtk_report/lut_viridis_norm.png",
+    "_vtk_report/lut_viridis_inv.png",
+    "_vtk_report/lut_turbo_norm.png",
+    "_vtk_report/lut_turbo_inv.png",
+    "_vtk_report/lut_coolwarm_norm.png",
+    "_vtk_report/lut_coolwarm_inv.png",
+    "_vtk_report/lut_plasma_norm.png",
+    "_vtk_report/lut_plasma_inv.png",
+    "_vtk_report/scalar_bar_on.png"
+  ],
+  "checks": {
+    "representations": {
+      "Points": true,
+      "Wireframe": true,
+      "Surface": true,
+      "Surface with Edges": true
+    },
+    "edges": {
+      "off": true,
+      "on": true
+    },
+    "luts": {
+      "viridis_norm": true,
+      "viridis_inv": true,
+      "turbo_norm": true,
+      "turbo_inv": true,
+      "coolwarm_norm": true,
+      "coolwarm_inv": true,
+      "plasma_norm": true,
+      "plasma_inv": true
+    },
+    "arrays": {
+      "picked": "POINT/displacement"
+    },
+    "scalar_bar": {
+      "off": true,
+      "on": true
+    }
+  }
+}

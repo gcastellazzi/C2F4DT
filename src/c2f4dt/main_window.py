@@ -192,7 +192,122 @@ class MainWindow(QtWidgets.QMainWindow):
         self._session_path: Optional[str] = None
 
         # Tree update guard to avoid cascading on auto-updates/partial states
+        # Explicitly ensure the flag exists and starts false
         self._tree_updating = False
+    def _iter_children(self, item: QtWidgets.QTreeWidgetItem):
+        """Yield direct children of *item* safely."""
+        for i in range(item.childCount()):
+            yield item.child(i)
+
+    def _set_item_checked(self, item: QtWidgets.QTreeWidgetItem, on: bool) -> None:
+        """Set the checkbox state of *item* without recursive signal storms."""
+        try:
+            self._tree_updating = True
+            item.setCheckState(0, QtCore.Qt.CheckState.Checked if on else QtCore.Qt.CheckState.Unchecked)
+        finally:
+            self._tree_updating = False
+
+    @QtCore.Slot(QtWidgets.QTreeWidgetItem, int)
+    def _on_tree_item_changed(self, item: QtWidgets.QTreeWidgetItem, column: int) -> None:
+        """
+        Handle checkbox toggles in treeMCTS.
+
+        Behavior:
+        - If 'Tree ➜ Parent check toggles children' is ON, propagate the state to children.
+        - Toggle dataset visibility for nodes that carry {'kind': 'points'|'mesh'|'normals', 'ds': int}.
+        - Ensure actors are (re)created when turning visibility ON.
+        - Keep self.mcts and viewer._datasets['visible'] in sync.
+        """
+        # Guard against programmatic changes
+        if getattr(self, "_tree_updating", False):
+            return
+        try:
+            role = QtCore.Qt.ItemDataRole.UserRole
+            data = item.data(0, role)
+            checked = item.checkState(0) == QtCore.Qt.CheckState.Checked
+            propagate = False
+            try:
+                propagate = bool(self.act_tree_propagate.isChecked())
+            except Exception:
+                propagate = False
+
+            # 1) Propagate to children if requested
+            if propagate:
+                try:
+                    self._tree_updating = True
+                    for ch in self._iter_children(item):
+                        ch.setCheckState(0, QtCore.Qt.CheckState.Checked if checked else QtCore.Qt.CheckState.Unchecked)
+                finally:
+                    self._tree_updating = False
+
+            # 2) If this node maps to a dataset, toggle visibility accordingly
+            if isinstance(data, dict):
+                kind = data.get("kind")
+                ds = data.get("ds")
+                if isinstance(ds, int) and kind in ("points", "mesh", "normals"):
+                    if kind in ("points", "mesh"):
+                        # Main dataset visibility
+                        self._viewer_set_visibility(kind, ds, bool(checked))
+                        # Persist visible flag into cache + session dicts
+                        try:
+                            self._persist_dataset_prop(ds, "visible", bool(checked))
+                        except Exception:
+                            pass
+                        # If we just turned OFF points, force normals OFF for that ds
+                        if kind == "points" and not checked:
+                            try:
+                                self._viewer_set_visibility("normals", ds, False)
+                            except Exception:
+                                pass
+                    elif kind == "normals":
+                        # Normals visibility only if dataset exists
+                        try:
+                            getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, bool(checked))
+                        except Exception:
+                            pass
+                        try:
+                            self._persist_dataset_prop(ds, "normals_visible", bool(checked))
+                        except Exception:
+                            pass
+
+            # 3) If a parent WITHOUT explicit kind was toggled, and propagate=False,
+            #    try to reflect the parent checkbox on immediate children that have ds/kind.
+            if (not propagate) and (not isinstance(data, dict)):
+                for ch in self._iter_children(item):
+                    dch = ch.data(0, role)
+                    if isinstance(dch, dict):
+                        kind = dch.get("kind")
+                        ds = dch.get("ds")
+                        if isinstance(ds, int) and kind in ("points", "mesh", "normals"):
+                            # Do not change checkbox UI; only re-sync visibility with current child state
+                            on = ch.checkState(0) == QtCore.Qt.CheckState.Checked
+                            if kind in ("points", "mesh"):
+                                self._viewer_set_visibility(kind, ds, bool(on))
+                            elif kind == "normals":
+                                try:
+                                    getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, bool(on))
+                                except Exception:
+                                    pass
+                            try:
+                                if kind == "normals":
+                                    self._persist_dataset_prop(ds, "normals_visible", bool(on))
+                                else:
+                                    self._persist_dataset_prop(ds, "visible", bool(on))
+                            except Exception:
+                                pass
+
+            # 4) Best-effort overlays refresh and viewer refresh
+            try:
+                self._reapply_overlays_safe()
+            except Exception:
+                pass
+            try:
+                self.viewer3d.refresh()
+            except Exception:
+                pass
+        except Exception:
+            # Avoid breaking the UI due to unexpected data
+            pass
 
         # 3D view preferences (dataclass-like dict, for settings dialog)
         self._view_prefs = {
@@ -1082,7 +1197,8 @@ class MainWindow(QtWidgets.QMainWindow):
                         # Build (or ensure) actors for data-bearing kinds
                         if kind in ("points", "mesh"):
                             # Ensure actor exists before toggling visibility
-                            self._viewer_ensure_actor(kind, int(ds))
+                            if bool(visible):
+                                self._viewer_ensure_actor(kind, int(ds))
                             # Reapply cached visuals after actor creation
                             self._apply_cached_visuals(int(ds))
                             self._viewer_set_visibility(kind, int(ds), bool(visible))
@@ -1236,6 +1352,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # Ensure actor exists if we are turning ON after a clear()
         if visible and kind in ("points", "mesh"):
             self._viewer_ensure_actor(kind, ds)
+        # Re-apply cached visuals so color/colormap don't reset to white defaults
+        if visible:
+            try:
+                self._apply_cached_visuals(ds)
+            except Exception:
+                pass
 
         # Preferred explicit API
         for name in ("set_dataset_visibility", "set_visibility", "set_points_visibility", "set_mesh_visibility"):
@@ -1248,6 +1370,14 @@ class MainWindow(QtWidgets.QMainWindow):
                         fn(kind, ds, bool(visible))
                     if kind == "points" and not visible:
                         getattr(v, "set_normals_visibility", lambda *_: None)(ds, False)
+                    # Persist visible flag into cache + session dicts
+                    try:
+                        if kind == "points":
+                            self._persist_dataset_prop(ds, "visible", bool(visible))
+                        elif kind == "mesh":
+                            self._persist_dataset_prop(ds, "visible", bool(visible))
+                    except Exception:
+                        pass
                     v.refresh()
                     return
                 except Exception:
@@ -1265,6 +1395,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Try again to build (another safety)
                 self._viewer_ensure_actor(kind, ds)
                 actor = rec.get("actor") or rec.get("actor_mesh") or rec.get("actor_points")
+            # After (re)creating the actor, re-apply cached styling (solid color, colormap, rep, etc.)
+            if visible:
+                try:
+                    self._apply_cached_visuals(ds)
+                except Exception:
+                    pass
             if actor is not None:
                 try:
                     actor.SetVisibility(1 if visible else 0)
@@ -1278,6 +1414,14 @@ class MainWindow(QtWidgets.QMainWindow):
                     getattr(v, "set_normals_visibility", lambda *_: None)(ds, False)
                 except Exception:
                     pass
+            # Persist visible flag into cache + session dicts
+            try:
+                if kind == "points":
+                    self._persist_dataset_prop(ds, "visible", bool(visible))
+                elif kind == "mesh":
+                    self._persist_dataset_prop(ds, "visible", bool(visible))
+            except Exception:
+                pass
             v.refresh()
         except Exception:
             pass
@@ -1304,6 +1448,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 if callable(fn):
                     try:
                         fn(ds)
+                        try:
+                            self._apply_cached_visuals(ds)
+                        except Exception:
+                            pass
                         return
                     except Exception:
                         pass
@@ -1316,6 +1464,10 @@ class MainWindow(QtWidgets.QMainWindow):
                     if callable(fn):
                         try:
                             fn(ds)
+                            try:
+                                self._apply_cached_visuals(ds)
+                            except Exception:
+                                pass
                             return
                         except Exception:
                             pass
@@ -1328,6 +1480,10 @@ class MainWindow(QtWidgets.QMainWindow):
                             point_size=int(rec.get("point_size", 3)), name=f"points_ds{ds}"
                         )
                         rec["actor_points"] = actor
+                        try:
+                            self._apply_cached_visuals(ds)
+                        except Exception:
+                            pass
                     except Exception:
                         pass
 
@@ -1337,6 +1493,10 @@ class MainWindow(QtWidgets.QMainWindow):
                     if callable(fn):
                         try:
                             fn(ds)
+                            try:
+                                self._apply_cached_visuals(ds)
+                            except Exception:
+                                pass
                             return
                         except Exception:
                             pass
@@ -1349,6 +1509,10 @@ class MainWindow(QtWidgets.QMainWindow):
                             name=f"mesh_ds{ds}"
                         )
                         rec["actor_mesh"] = actor
+                        try:
+                            self._apply_cached_visuals(ds)
+                        except Exception:
+                            pass
                     except Exception:
                         pass
         except Exception:
