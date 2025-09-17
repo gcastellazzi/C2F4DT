@@ -1,0 +1,1792 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Cloud2FEM for Digital Twins tools">
+      
+      
+        <meta name="author" content="Giovanni Castellazzi">
+      
+      
+      
+        <link rel="prev" href="../plugins_developer_guide/">
+      
+      
+        <link rel="next" href="../../api/">
+      
+      
+      <link rel="icon" href="../../assets/logo-cloud2fem.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.19">
+    
+    
+      
+        <title>Console Guide - C2F4DT</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.7e37652d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#c2f4dt-python-console-user-guide-cheat-sheet" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="C2F4DT" class="md-header__button md-logo" aria-label="C2F4DT" data-md-component="logo">
+      
+  <img src="../../assets/logo-cloud2fem.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            C2F4DT
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Console Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/gcastellazzi/C2F4DT" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../overview/" class="md-tabs__link">
+          
+  
+  
+  Guide
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../api/" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+  
+
+<nav class="md-nav md-nav--primary md-nav--lifted md-nav--integrated" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="C2F4DT" class="md-nav__button md-logo" aria-label="C2F4DT" data-md-component="logo">
+      
+  <img src="../../assets/logo-cloud2fem.png" alt="logo">
+
+    </a>
+    C2F4DT
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/gcastellazzi/C2F4DT" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Guide
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Architecture
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code_tree/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Code Tree
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flowchart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Flowchart
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gui_layout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Gui Layout
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../theory/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Theory
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins_developer_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Plugins Developer Guide
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Console Guide
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Console Guide
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quick Start
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cheat-sheet-tldr" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cheat Sheet (TL;DR)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keybindings" class="md-nav__link">
+    <span class="md-ellipsis">
+      Keybindings
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-magics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Supported “Magics”
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-live-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Live Context
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      Practical Examples
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Practical Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-inspect-the-current-scene" class="md-nav__link">
+    <span class="md-ellipsis">
+      1) Inspect the current scene
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-extract-a-pointdata-vector-magnitude-to-csv" class="md-nav__link">
+    <span class="md-ellipsis">
+      2) Extract a PointData vector magnitude to CSV
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-color-the-mesh-by-displacement-magnitude-from-the-console" class="md-nav__link">
+    <span class="md-ellipsis">
+      3) Color the mesh by displacement magnitude from the console
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-batch-toggle-styles-and-take-screenshots" class="md-nav__link">
+    <span class="md-ellipsis">
+      4) Batch toggle styles and take screenshots
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-extract-displacement-xyz-to-pandas-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      5) Extract displacement X/Y/Z to Pandas (optional)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-programmatically-edit-appearance" class="md-nav__link">
+    <span class="md-ellipsis">
+      6) Programmatically edit appearance
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-mapping-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data Mapping Notes
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Troubleshooting
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#appendix-minimal-api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      Appendix: Minimal API Reference
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#changelog-credits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Changelog &amp; Credits
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    API Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            API Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Index
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/app/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.app
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/main_window/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.main_window
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.plugins
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/plugins/example_display_button/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.plugins.example_display_button
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/plugins/example_display_button/plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.plugins.example_display_button.plugin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/plugins/manager/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.plugins.manager
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/plugins/transform_rt/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.plugins.transform_rt
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/plugins/transform_rt/plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.plugins.transform_rt.plugin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/plugins/units/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.plugins.units
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/plugins/units/plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.plugins.units.plugin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/plugins/vtk_import/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.plugins.vtk_import
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/plugins/vtk_import/plugin/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.plugins.vtk_import.plugin
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/ui/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.ui
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/ui/console/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.ui.console
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/ui/display_panel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.ui.display_panel
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/ui/import_summary_dialog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.ui.import_summary_dialog
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/ui/viewer3d/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.ui.viewer3d
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.utils
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/utils/icons/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.utils.icons
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/utils/io/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.utils.io
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/utils/io/importers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.utils.io.importers
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/utils/systeminfo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.utils.systeminfo
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/c2f4dt/utils/theme/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    c2f4dt.utils.theme
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/gcastellazzi/C2F4DT/edit/master/docs/guide/console_guide.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="c2f4dt-python-console-user-guide-cheat-sheet">C2F4DT Python Console — User Guide &amp; Cheat Sheet<a class="headerlink" href="#c2f4dt-python-console-user-guide-cheat-sheet" title="Permanent link">&para;</a></h1>
+<p><img src="/assets/image6.png" alt="Console on the frog example" width="400" height="400" align="right">
+The C2F4DT console is a lightweight, Abaqus-style <strong>interactive Python</strong> terminal built into the UI. It lets you:
+- Inspect objects in the current scene (viewer, datasets, treeMCTS).
+- Query VTK/PyVista data (points, cells, arrays).
+- Batch operations: styling, screenshots, exports.
+- Run quick scripts with a persistent namespace.</p>
+<blockquote>
+<p>Tip: Press <strong>TAB</strong> for autocompletion. Use <strong>Shift+Enter</strong> to insert a newline without executing.</p>
+</blockquote>
+<hr />
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Open <strong>View → Console</strong> (or the console tab/pane if pinned).</li>
+<li>At the prompt <code>&gt;&gt;&gt;</code> type Python code and press <strong>Enter</strong>.</li>
+<li>Multi-line blocks are supported; continuation prompts use <code>...</code>.</li>
+<li>Use <strong>Up/Down</strong> to navigate command history on the current prompt.</li>
+</ol>
+<hr />
+<h2 id="cheat-sheet-tldr">Cheat Sheet (TL;DR)<a class="headerlink" href="#cheat-sheet-tldr" title="Permanent link">&para;</a></h2>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-1"> 1</a></span>
+<span class="normal"><a href="#__codelineno-0-2"> 2</a></span>
+<span class="normal"><a href="#__codelineno-0-3"> 3</a></span>
+<span class="normal"><a href="#__codelineno-0-4"> 4</a></span>
+<span class="normal"><a href="#__codelineno-0-5"> 5</a></span>
+<span class="normal"><a href="#__codelineno-0-6"> 6</a></span>
+<span class="normal"><a href="#__codelineno-0-7"> 7</a></span>
+<span class="normal"><a href="#__codelineno-0-8"> 8</a></span>
+<span class="normal"><a href="#__codelineno-0-9"> 9</a></span>
+<span class="normal"><a href="#__codelineno-0-10">10</a></span>
+<span class="normal"><a href="#__codelineno-0-11">11</a></span>
+<span class="normal"><a href="#__codelineno-0-12">12</a></span>
+<span class="normal"><a href="#__codelineno-0-13">13</a></span>
+<span class="normal"><a href="#__codelineno-0-14">14</a></span>
+<span class="normal"><a href="#__codelineno-0-15">15</a></span>
+<span class="normal"><a href="#__codelineno-0-16">16</a></span>
+<span class="normal"><a href="#__codelineno-0-17">17</a></span>
+<span class="normal"><a href="#__codelineno-0-18">18</a></span>
+<span class="normal"><a href="#__codelineno-0-19">19</a></span>
+<span class="normal"><a href="#__codelineno-0-20">20</a></span>
+<span class="normal"><a href="#__codelineno-0-21">21</a></span>
+<span class="normal"><a href="#__codelineno-0-22">22</a></span>
+<span class="normal"><a href="#__codelineno-0-23">23</a></span>
+<span class="normal"><a href="#__codelineno-0-24">24</a></span>
+<span class="normal"><a href="#__codelineno-0-25">25</a></span>
+<span class="normal"><a href="#__codelineno-0-26">26</a></span>
+<span class="normal"><a href="#__codelineno-0-27">27</a></span>
+<span class="normal"><a href="#__codelineno-0-28">28</a></span>
+<span class="normal"><a href="#__codelineno-0-29">29</a></span>
+<span class="normal"><a href="#__codelineno-0-30">30</a></span>
+<span class="normal"><a href="#__codelineno-0-31">31</a></span>
+<span class="normal"><a href="#__codelineno-0-32">32</a></span>
+<span class="normal"><a href="#__codelineno-0-33">33</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1"></a><span class="c1"># Get common objects from the live context</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2"></a><span class="n">window</span>           <span class="c1"># MainWindow instance</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3"></a><span class="n">viewer</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">viewer3d</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4"></a><span class="n">mct</span>              <span class="c1"># Current dataset record (dict)</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5"></a><span class="n">mcts</span>             <span class="c1"># All dataset records (dict[str, dict])</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7"></a><span class="c1"># Current dataset index and record</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">_current_dataset_index</span><span class="p">()</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9"></a><span class="n">rec</span> <span class="o">=</span> <span class="n">viewer</span><span class="o">.</span><span class="n">_datasets</span><span class="p">[</span><span class="n">ds</span><span class="p">]</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10"></a>
+<a id="__codelineno-0-11" name="__codelineno-0-11"></a><span class="c1"># Switch representation / color mode</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12"></a><span class="n">viewer</span><span class="o">.</span><span class="n">set_mesh_representation</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="s2">&quot;Surface with Edges&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13"></a><span class="n">viewer</span><span class="o">.</span><span class="n">set_color_mode</span><span class="p">(</span><span class="s2">&quot;Solid Color&quot;</span><span class="p">,</span> <span class="n">ds</span><span class="p">)</span>
+<a id="__codelineno-0-14" name="__codelineno-0-14"></a><span class="n">viewer</span><span class="o">.</span><span class="n">set_color_mode</span><span class="p">(</span><span class="s2">&quot;PointData/displacement&quot;</span><span class="p">,</span> <span class="n">ds</span><span class="p">)</span>  <span class="c1"># then choose vector mode in UI</span>
+<a id="__codelineno-0-15" name="__codelineno-0-15"></a>
+<a id="__codelineno-0-16" name="__codelineno-0-16"></a><span class="c1"># Change visuals</span>
+<a id="__codelineno-0-17" name="__codelineno-0-17"></a><span class="n">viewer</span><span class="o">.</span><span class="n">set_mesh_opacity</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="mi">60</span><span class="p">)</span>       <span class="c1"># 0..100</span>
+<a id="__codelineno-0-18" name="__codelineno-0-18"></a><span class="n">viewer</span><span class="o">.</span><span class="n">set_point_size</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="n">ds</span><span class="p">)</span>
+<a id="__codelineno-0-19" name="__codelineno-0-19"></a><span class="n">viewer</span><span class="o">.</span><span class="n">set_line_width</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-0-20" name="__codelineno-0-20"></a><span class="n">viewer</span><span class="o">.</span><span class="n">set_edge_visibility</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-21" name="__codelineno-0-21"></a><span class="n">viewer</span><span class="o">.</span><span class="n">set_edge_color</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-0-22" name="__codelineno-0-22"></a><span class="n">viewer</span><span class="o">.</span><span class="n">set_scalar_bar_visible</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-23" name="__codelineno-0-23"></a>
+<a id="__codelineno-0-24" name="__codelineno-0-24"></a><span class="c1"># Fit camera &amp; screenshot</span>
+<a id="__codelineno-0-25" name="__codelineno-0-25"></a><span class="n">viewer</span><span class="o">.</span><span class="n">view_fit</span><span class="p">()</span>
+<a id="__codelineno-0-26" name="__codelineno-0-26"></a><span class="n">viewer</span><span class="o">.</span><span class="n">save_screenshot</span><span class="p">(</span><span class="s2">&quot;scene.png&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-27" name="__codelineno-0-27"></a>
+<a id="__codelineno-0-28" name="__codelineno-0-28"></a><span class="c1"># File system magics</span>
+<a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="o">%</span><span class="n">pwd</span>
+<a id="__codelineno-0-30" name="__codelineno-0-30"></a><span class="o">%</span><span class="n">ls</span> <span class="o">*.</span><span class="n">vtk</span>
+<a id="__codelineno-0-31" name="__codelineno-0-31"></a><span class="o">%</span><span class="n">cd</span> <span class="n">path</span><span class="o">/</span><span class="n">to</span><span class="o">/</span><span class="n">data</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32"></a><span class="o">%</span><span class="n">run</span> <span class="n">my_script</span><span class="o">.</span><span class="n">py</span>
+<a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="o">%</span><span class="n">clear</span>
+</code></pre></div></td></tr></table></div>
+<hr />
+<h2 id="keybindings">Keybindings<a class="headerlink" href="#keybindings" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Enter</strong>: Execute (if the code block is syntactically complete).</li>
+<li><strong>Shift+Enter</strong>: Newline (do not execute).</li>
+<li><strong>TAB</strong>: Autocomplete (popup with names/attributes/keys).</li>
+<li><strong>Up/Down</strong>: Command history (at current prompt).</li>
+<li><strong>Home/Backspace</strong>: Protected before prompt (can’t edit past output).</li>
+</ul>
+<hr />
+<h2 id="supported-magics">Supported “Magics”<a class="headerlink" href="#supported-magics" title="Permanent link">&para;</a></h2>
+<p>The console implements a few IPython-like “magics” (single-line commands):</p>
+<ul>
+<li><code>%pwd</code> — print current working directory  </li>
+<li><code>%cd &lt;path&gt;</code> — change directory (e.g., <code>%cd ../data</code>)  </li>
+<li><code>%ls [pattern]</code> — list files (glob pattern, e.g., <code>%ls *.vtk</code>)  </li>
+<li><code>%run &lt;file.py&gt;</code> — run a local Python file with access to <code>window/mct/mcts</code>  </li>
+<li><code>%clear</code> — clear the console buffer</li>
+</ul>
+<blockquote>
+<p>Note: <code>%run</code> calls <code>window._exec_script_file()</code> under the hood, so your script can interact with the live app.</p>
+</blockquote>
+<hr />
+<h2 id="the-live-context">The Live Context<a class="headerlink" href="#the-live-context" title="Permanent link">&para;</a></h2>
+<p>Every time you execute, the console refreshes a persistent namespace that includes:</p>
+<ul>
+<li><code>window</code>: the main UI/controller</li>
+<li><code>viewer3d</code> (via <code>window.viewer3d</code>): the plotter &amp; dataset actors</li>
+<li><code>mct</code>: the <strong>current</strong> dataset’s metadata/visual state (dict)</li>
+<li><code>mcts</code>: the collection of all dataset entries (dict)</li>
+</ul>
+<p>This means you can write short, <strong>stateful</strong> snippets that build on previous ones.</p>
+<hr />
+<h2 id="practical-examples">Practical Examples<a class="headerlink" href="#practical-examples" title="Permanent link">&para;</a></h2>
+<h3 id="1-inspect-the-current-scene">1) Inspect the current scene<a class="headerlink" href="#1-inspect-the-current-scene" title="Permanent link">&para;</a></h3>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-1-1"> 1</a></span>
+<span class="normal"><a href="#__codelineno-1-2"> 2</a></span>
+<span class="normal"><a href="#__codelineno-1-3"> 3</a></span>
+<span class="normal"><a href="#__codelineno-1-4"> 4</a></span>
+<span class="normal"><a href="#__codelineno-1-5"> 5</a></span>
+<span class="normal"><a href="#__codelineno-1-6"> 6</a></span>
+<span class="normal"><a href="#__codelineno-1-7"> 7</a></span>
+<span class="normal"><a href="#__codelineno-1-8"> 8</a></span>
+<span class="normal"><a href="#__codelineno-1-9"> 9</a></span>
+<span class="normal"><a href="#__codelineno-1-10">10</a></span>
+<span class="normal"><a href="#__codelineno-1-11">11</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1"></a><span class="c1"># Inspect current dataset and its arrays</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">_current_dataset_index</span><span class="p">()</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3"></a><span class="n">rec</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">viewer3d</span><span class="o">.</span><span class="n">_datasets</span><span class="p">[</span><span class="n">ds</span><span class="p">]</span>           <span class="c1"># internal record</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4"></a>
+<a id="__codelineno-1-5" name="__codelineno-1-5"></a><span class="c1"># Prefer the renderable surface (PolyData) for visualization</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6"></a><span class="n">pdata</span> <span class="o">=</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mesh_surface&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mesh&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pdata&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_pdata&quot;</span><span class="p">)</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7"></a>
+<a id="__codelineno-1-8" name="__codelineno-1-8"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Dataset keys:&quot;</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="n">rec</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;n_points =&quot;</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">pdata</span><span class="p">,</span> <span class="s2">&quot;n_points&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="s2">&quot; n_cells =&quot;</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">pdata</span><span class="p">,</span> <span class="s2">&quot;n_cells&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;PointData arrays:&quot;</span><span class="p">,</span> <span class="nb">list</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">pdata</span><span class="p">,</span> <span class="s2">&quot;point_data&quot;</span><span class="p">,</span> <span class="p">{})</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;CellData arrays:&quot;</span><span class="p">,</span>  <span class="nb">list</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">pdata</span><span class="p">,</span> <span class="s2">&quot;cell_data&quot;</span><span class="p">,</span>  <span class="p">{})</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+</code></pre></div></td></tr></table></div>
+<h3 id="2-extract-a-pointdata-vector-magnitude-to-csv">2) Extract a <strong>PointData</strong> vector magnitude to CSV<a class="headerlink" href="#2-extract-a-pointdata-vector-magnitude-to-csv" title="Permanent link">&para;</a></h3>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-2-1"> 1</a></span>
+<span class="normal"><a href="#__codelineno-2-2"> 2</a></span>
+<span class="normal"><a href="#__codelineno-2-3"> 3</a></span>
+<span class="normal"><a href="#__codelineno-2-4"> 4</a></span>
+<span class="normal"><a href="#__codelineno-2-5"> 5</a></span>
+<span class="normal"><a href="#__codelineno-2-6"> 6</a></span>
+<span class="normal"><a href="#__codelineno-2-7"> 7</a></span>
+<span class="normal"><a href="#__codelineno-2-8"> 8</a></span>
+<span class="normal"><a href="#__codelineno-2-9"> 9</a></span>
+<span class="normal"><a href="#__codelineno-2-10">10</a></span>
+<span class="normal"><a href="#__codelineno-2-11">11</a></span>
+<span class="normal"><a href="#__codelineno-2-12">12</a></span>
+<span class="normal"><a href="#__codelineno-2-13">13</a></span>
+<span class="normal"><a href="#__codelineno-2-14">14</a></span>
+<span class="normal"><a href="#__codelineno-2-15">15</a></span>
+<span class="normal"><a href="#__codelineno-2-16">16</a></span>
+<span class="normal"><a href="#__codelineno-2-17">17</a></span>
+<span class="normal"><a href="#__codelineno-2-18">18</a></span>
+<span class="normal"><a href="#__codelineno-2-19">19</a></span>
+<span class="normal"><a href="#__codelineno-2-20">20</a></span>
+<span class="normal"><a href="#__codelineno-2-21">21</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">csv</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">export_point_magnitude</span><span class="p">(</span><span class="n">array_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">csv_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5"></a>    <span class="c1"># Export the vector magnitude of a PointData array to CSV</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6"></a>    <span class="n">ds</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">_current_dataset_index</span><span class="p">()</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7"></a>    <span class="n">rec</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">viewer3d</span><span class="o">.</span><span class="n">_datasets</span><span class="p">[</span><span class="n">ds</span><span class="p">]</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8"></a>    <span class="n">src</span> <span class="o">=</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mesh_orig&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mesh&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pdata&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_pdata&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9"></a>    <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="n">array_name</span><span class="p">])</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10"></a>    <span class="k">if</span> <span class="n">arr</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">2</span> <span class="ow">or</span> <span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">):</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">array_name</span><span class="si">}</span><span class="s2"> is not a 2D vector array&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12"></a>    <span class="n">mag</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13"></a>
+<a id="__codelineno-2-14" name="__codelineno-2-14"></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">csv_path</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="n">newline</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15"></a>        <span class="n">w</span> <span class="o">=</span> <span class="n">csv</span><span class="o">.</span><span class="n">writer</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16"></a>        <span class="n">w</span><span class="o">.</span><span class="n">writerow</span><span class="p">([</span><span class="s2">&quot;point_id&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">array_name</span><span class="si">}</span><span class="s2">_magnitude&quot;</span><span class="p">])</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17"></a>        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">mag</span><span class="p">):</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18"></a>            <span class="n">w</span><span class="o">.</span><span class="n">writerow</span><span class="p">([</span><span class="n">i</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)])</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19"></a>
+<a id="__codelineno-2-20" name="__codelineno-2-20"></a><span class="n">export_point_magnitude</span><span class="p">(</span><span class="s2">&quot;displacement&quot;</span><span class="p">,</span> <span class="s2">&quot;displacement_mag.csv&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-21" name="__codelineno-2-21"></a><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Saved: displacement_mag.csv&quot;</span><span class="p">)</span>
+</code></pre></div></td></tr></table></div>
+<h3 id="3-color-the-mesh-by-displacement-magnitude-from-the-console">3) Color the mesh by <strong>displacement magnitude</strong> from the console<a class="headerlink" href="#3-color-the-mesh-by-displacement-magnitude-from-the-console" title="Permanent link">&para;</a></h3>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-3-1">1</a></span>
+<span class="normal"><a href="#__codelineno-3-2">2</a></span>
+<span class="normal"><a href="#__codelineno-3-3">3</a></span>
+<span class="normal"><a href="#__codelineno-3-4">4</a></span>
+<span class="normal"><a href="#__codelineno-3-5">5</a></span>
+<span class="normal"><a href="#__codelineno-3-6">6</a></span>
+<span class="normal"><a href="#__codelineno-3-7">7</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1"></a><span class="n">ds</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">_current_dataset_index</span><span class="p">()</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2"></a><span class="n">window</span><span class="o">.</span><span class="n">viewer3d</span><span class="o">.</span><span class="n">set_color_mode</span><span class="p">(</span><span class="s2">&quot;PointData/displacement&quot;</span><span class="p">,</span> <span class="n">ds</span><span class="p">)</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3"></a><span class="n">mct</span><span class="p">[</span><span class="s2">&quot;vector_mode&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Magnitude&quot;</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4"></a><span class="n">mct</span><span class="p">[</span><span class="s2">&quot;colormap&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;Viridis&quot;</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5"></a><span class="n">mct</span><span class="p">[</span><span class="s2">&quot;invert_lut&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6"></a><span class="n">window</span><span class="o">.</span><span class="n">viewer3d</span><span class="o">.</span><span class="n">set_scalar_bar_visible</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7"></a><span class="n">window</span><span class="o">.</span><span class="n">viewer3d</span><span class="o">.</span><span class="n">view_render</span><span class="p">()</span>
+</code></pre></div></td></tr></table></div>
+<h3 id="4-batch-toggle-styles-and-take-screenshots">4) Batch toggle styles and take screenshots<a class="headerlink" href="#4-batch-toggle-styles-and-take-screenshots" title="Permanent link">&para;</a></h3>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-4-1"> 1</a></span>
+<span class="normal"><a href="#__codelineno-4-2"> 2</a></span>
+<span class="normal"><a href="#__codelineno-4-3"> 3</a></span>
+<span class="normal"><a href="#__codelineno-4-4"> 4</a></span>
+<span class="normal"><a href="#__codelineno-4-5"> 5</a></span>
+<span class="normal"><a href="#__codelineno-4-6"> 6</a></span>
+<span class="normal"><a href="#__codelineno-4-7"> 7</a></span>
+<span class="normal"><a href="#__codelineno-4-8"> 8</a></span>
+<span class="normal"><a href="#__codelineno-4-9"> 9</a></span>
+<span class="normal"><a href="#__codelineno-4-10">10</a></span>
+<span class="normal"><a href="#__codelineno-4-11">11</a></span>
+<span class="normal"><a href="#__codelineno-4-12">12</a></span>
+<span class="normal"><a href="#__codelineno-4-13">13</a></span>
+<span class="normal"><a href="#__codelineno-4-14">14</a></span>
+<span class="normal"><a href="#__codelineno-4-15">15</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2"></a>
+<a id="__codelineno-4-3" name="__codelineno-4-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">batch_screenshots</span><span class="p">(</span><span class="n">out_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;_shots&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4"></a>    <span class="n">reps</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Surface&quot;</span><span class="p">,</span> <span class="s2">&quot;Surface with Edges&quot;</span><span class="p">,</span> <span class="s2">&quot;Wireframe&quot;</span><span class="p">,</span> <span class="s2">&quot;Points&quot;</span><span class="p">]</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5"></a>    <span class="n">Path</span><span class="p">(</span><span class="n">out_dir</span><span class="p">)</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6"></a>    <span class="n">ds</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">_current_dataset_index</span><span class="p">()</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8"></a>    <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">reps</span><span class="p">:</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9"></a>        <span class="n">window</span><span class="o">.</span><span class="n">viewer3d</span><span class="o">.</span><span class="n">set_mesh_representation</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10"></a>        <span class="n">window</span><span class="o">.</span><span class="n">viewer3d</span><span class="o">.</span><span class="n">view_fit</span><span class="p">()</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11"></a>        <span class="n">path</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">out_dir</span><span class="p">)</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39; &#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;_&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12"></a>        <span class="n">window</span><span class="o">.</span><span class="n">viewer3d</span><span class="o">.</span><span class="n">save_screenshot</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13"></a>        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;[saved]&quot;</span><span class="p">,</span> <span class="n">path</span><span class="p">)</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14"></a>
+<a id="__codelineno-4-15" name="__codelineno-4-15"></a><span class="n">batch_screenshots</span><span class="p">()</span>
+</code></pre></div></td></tr></table></div>
+<h3 id="5-extract-displacement-xyz-to-pandas-optional">5) Extract <strong>displacement X/Y/Z</strong> to Pandas (optional)<a class="headerlink" href="#5-extract-displacement-xyz-to-pandas-optional" title="Permanent link">&para;</a></h3>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-5-1"> 1</a></span>
+<span class="normal"><a href="#__codelineno-5-2"> 2</a></span>
+<span class="normal"><a href="#__codelineno-5-3"> 3</a></span>
+<span class="normal"><a href="#__codelineno-5-4"> 4</a></span>
+<span class="normal"><a href="#__codelineno-5-5"> 5</a></span>
+<span class="normal"><a href="#__codelineno-5-6"> 6</a></span>
+<span class="normal"><a href="#__codelineno-5-7"> 7</a></span>
+<span class="normal"><a href="#__codelineno-5-8"> 8</a></span>
+<span class="normal"><a href="#__codelineno-5-9"> 9</a></span>
+<span class="normal"><a href="#__codelineno-5-10">10</a></span>
+<span class="normal"><a href="#__codelineno-5-11">11</a></span>
+<span class="normal"><a href="#__codelineno-5-12">12</a></span>
+<span class="normal"><a href="#__codelineno-5-13">13</a></span>
+<span class="normal"><a href="#__codelineno-5-14">14</a></span>
+<span class="normal"><a href="#__codelineno-5-15">15</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">point_components_to_dataframe</span><span class="p">(</span><span class="n">array_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;pd.DataFrame&quot;</span><span class="p">:</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5"></a>    <span class="n">ds</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">_current_dataset_index</span><span class="p">()</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6"></a>    <span class="n">rec</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">viewer3d</span><span class="o">.</span><span class="n">_datasets</span><span class="p">[</span><span class="n">ds</span><span class="p">]</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7"></a>    <span class="n">src</span> <span class="o">=</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mesh_orig&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;mesh&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pdata&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">rec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;full_pdata&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8"></a>    <span class="n">vec</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">src</span><span class="o">.</span><span class="n">point_data</span><span class="p">[</span><span class="n">array_name</span><span class="p">])</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9"></a>    <span class="k">if</span> <span class="n">vec</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">2</span> <span class="ow">or</span> <span class="n">vec</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">):</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Not a vector array&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11"></a>    <span class="n">cols</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">,</span> <span class="s2">&quot;Y&quot;</span><span class="p">]</span> <span class="k">if</span> <span class="n">vec</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">2</span> <span class="k">else</span> <span class="p">[</span><span class="s2">&quot;X&quot;</span><span class="p">,</span> <span class="s2">&quot;Y&quot;</span><span class="p">,</span> <span class="s2">&quot;Z&quot;</span><span class="p">]</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12"></a>    <span class="k">return</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">vec</span><span class="p">,</span> <span class="n">columns</span><span class="o">=</span><span class="n">cols</span><span class="p">)</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13"></a>
+<a id="__codelineno-5-14" name="__codelineno-5-14"></a><span class="n">df</span> <span class="o">=</span> <span class="n">point_components_to_dataframe</span><span class="p">(</span><span class="s2">&quot;displacement&quot;</span><span class="p">)</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15"></a><span class="n">df</span><span class="o">.</span><span class="n">describe</span><span class="p">()</span>
+</code></pre></div></td></tr></table></div>
+<h3 id="6-programmatically-edit-appearance">6) Programmatically edit appearance<a class="headerlink" href="#6-programmatically-edit-appearance" title="Permanent link">&para;</a></h3>
+<div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-6-1"> 1</a></span>
+<span class="normal"><a href="#__codelineno-6-2"> 2</a></span>
+<span class="normal"><a href="#__codelineno-6-3"> 3</a></span>
+<span class="normal"><a href="#__codelineno-6-4"> 4</a></span>
+<span class="normal"><a href="#__codelineno-6-5"> 5</a></span>
+<span class="normal"><a href="#__codelineno-6-6"> 6</a></span>
+<span class="normal"><a href="#__codelineno-6-7"> 7</a></span>
+<span class="normal"><a href="#__codelineno-6-8"> 8</a></span>
+<span class="normal"><a href="#__codelineno-6-9"> 9</a></span>
+<span class="normal"><a href="#__codelineno-6-10">10</a></span>
+<span class="normal"><a href="#__codelineno-6-11">11</a></span>
+<span class="normal"><a href="#__codelineno-6-12">12</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">set_pretty_style</span><span class="p">(</span><span class="n">ds</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2"></a>    <span class="n">viewer</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">viewer3d</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3"></a>    <span class="n">viewer</span><span class="o">.</span><span class="n">set_mesh_representation</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="s2">&quot;Surface with Edges&quot;</span><span class="p">)</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4"></a>    <span class="n">viewer</span><span class="o">.</span><span class="n">set_mesh_opacity</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5"></a>    <span class="n">viewer</span><span class="o">.</span><span class="n">set_edge_visibility</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6"></a>    <span class="n">viewer</span><span class="o">.</span><span class="n">set_edge_color</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7"></a>    <span class="n">viewer</span><span class="o">.</span><span class="n">set_point_size</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">ds</span><span class="p">)</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8"></a>    <span class="n">viewer</span><span class="o">.</span><span class="n">set_line_width</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9"></a>    <span class="n">viewer</span><span class="o">.</span><span class="n">view_fit</span><span class="p">()</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10"></a>    <span class="n">viewer</span><span class="o">.</span><span class="n">view_render</span><span class="p">()</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11"></a>
+<a id="__codelineno-6-12" name="__codelineno-6-12"></a><span class="n">set_pretty_style</span><span class="p">(</span><span class="n">window</span><span class="o">.</span><span class="n">_current_dataset_index</span><span class="p">())</span>
+</code></pre></div></td></tr></table></div>
+<hr />
+<h2 id="data-mapping-notes">Data Mapping Notes<a class="headerlink" href="#data-mapping-notes" title="Permanent link">&para;</a></h2>
+<p>C2F4DT renders non-PolyData inputs (e.g., <code>UnstructuredGrid</code>) via an <strong>extracted surface</strong>. PointData arrays are mapped using:</p>
+<ol>
+<li><code>vtkOriginalPointIds</code></li>
+<li>KDTree nearest neighbor (if SciPy installed)</li>
+<li>Pass-through if sizes match</li>
+</ol>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>No colors / white mesh</strong> → choose a valid array in “Color by”  </li>
+<li><strong>LUT not working</strong> → install matplotlib (<code>pip install matplotlib</code>)  </li>
+<li><strong>Mapping fails</strong> → install SciPy (<code>pip install scipy</code>)  </li>
+</ul>
+<hr />
+<h2 id="appendix-minimal-api-reference">Appendix: Minimal API Reference<a class="headerlink" href="#appendix-minimal-api-reference" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>window._current_dataset_index()</code>  </li>
+<li><code>viewer3d.set_mesh_representation(ds, mode)</code>  </li>
+<li><code>viewer3d.set_color_mode(mode, ds)</code>  </li>
+<li><code>viewer3d.set_scalar_bar_visible(ds, on: bool)</code>  </li>
+<li><code>viewer3d.set_mesh_opacity(ds, value: int)</code>  </li>
+<li><code>viewer3d.set_point_size(value: int, ds)</code>  </li>
+<li><code>viewer3d.set_line_width(ds, value: int)</code>  </li>
+<li><code>viewer3d.set_edge_visibility(ds, on: bool)</code>  </li>
+<li><code>viewer3d.set_edge_color(ds, r, g, b)</code>  </li>
+<li><code>viewer3d.view_fit()</code>, <code>viewer3d.view_render()</code>, <code>viewer3d.save_screenshot(path)</code></li>
+</ul>
+<hr />
+<h2 id="changelog-credits">Changelog &amp; Credits<a class="headerlink" href="#changelog-credits" title="Permanent link">&para;</a></h2>
+<p>This guide corresponds to the version where:
+- PointData → surface mapping was added (via <code>vtkOriginalPointIds</code> + KDTree fallback).
+- LUT normalization and scalar array robustness were improved.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.tabs", "navigation.sections", "content.code.copy", "content.action.edit", "toc.integrate"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.92b07e13.min.js"></script>
+      
+    
+  </body>
+</html>
