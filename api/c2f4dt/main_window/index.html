@@ -224,6 +224,26 @@
   
   
   
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../guide/plugins/units/" class="md-tabs__link">
+          
+  
+  
+  Plugins
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
     
   
   
@@ -572,29 +592,6 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../guide/theory/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Theory
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../../../guide/plugins_developer_guide/" class="md-nav__link">
         
   
@@ -645,6 +642,171 @@
       
   
   
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    Plugins
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Plugins
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/plugins/units/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Units
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/plugins/cloud_inspection/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Cloud metrics
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/plugins/transformations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Transform RT
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/plugins/import_vtk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    VTK Import
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../guide/plugins/cloud2fem/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Cloud2FEM
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -666,10 +828,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -682,8 +844,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             API Reference
           </label>
@@ -7682,13 +7844,13 @@ visualization of point clouds and meshes, as well as user interactions with the 
 <a id="__codelineno-0-2469" name="__codelineno-0-2469"></a>                    <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="n">fn</span><span class="p">)</span> <span class="ow">and</span> <span class="n">_call_safe</span><span class="p">(</span><span class="n">fn</span><span class="p">):</span>
 <a id="__codelineno-0-2470" name="__codelineno-0-2470"></a>                        <span class="k">return</span>
 <a id="__codelineno-0-2471" name="__codelineno-0-2471"></a>
-<a id="__codelineno-0-2472" name="__codelineno-0-2472"></a>            <span class="n">QtWidgets</span><span class="o">.</span><span class="n">QMessageBox</span><span class="o">.</span><span class="n">information</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;Plugin&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Plugin &#39;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&#39; non espone azioni note.&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-2472" name="__codelineno-0-2472"></a>            <span class="n">QtWidgets</span><span class="o">.</span><span class="n">QMessageBox</span><span class="o">.</span><span class="n">information</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;Plugin&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Plugin &#39;</span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">&#39; does not expose any known actions.&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-2473" name="__codelineno-0-2473"></a>        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">ex</span><span class="p">:</span>
 <a id="__codelineno-0-2474" name="__codelineno-0-2474"></a>            <span class="n">QtWidgets</span><span class="o">.</span><span class="n">QMessageBox</span><span class="o">.</span><span class="n">critical</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;Plugin error&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">ex</span><span class="p">))</span>
 <a id="__codelineno-0-2475" name="__codelineno-0-2475"></a>
 <a id="__codelineno-0-2476" name="__codelineno-0-2476"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_invoke_plugin_action</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plugin</span><span class="p">,</span> <span class="n">action_desc</span><span class="p">,</span> <span class="n">ctx</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-2477" name="__codelineno-0-2477"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Esegue una singola azione del plugin, descritta come dict:</span>
-<a id="__codelineno-0-2478" name="__codelineno-0-2478"></a><span class="sd">           {&#39;label&#39;: &#39;Do X&#39;, &#39;slot&#39;: callable} oppure {&#39;label&#39;:..., &#39;method&#39;: &#39;run&#39;}.</span>
+<a id="__codelineno-0-2477" name="__codelineno-0-2477"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Executes a single plugin action described as a dictionary:</span>
+<a id="__codelineno-0-2478" name="__codelineno-0-2478"></a><span class="sd">           {&#39;label&#39;: &#39;Do X&#39;, &#39;slot&#39;: callable} or {&#39;label&#39;: ..., &#39;method&#39;: &#39;run&#39;}.</span>
 <a id="__codelineno-0-2479" name="__codelineno-0-2479"></a><span class="sd">        &quot;&quot;&quot;</span>
 <a id="__codelineno-0-2480" name="__codelineno-0-2480"></a>        <span class="k">try</span><span class="p">:</span>
 <a id="__codelineno-0-2481" name="__codelineno-0-2481"></a>            <span class="n">slot</span> <span class="o">=</span> <span class="n">action_desc</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;slot&quot;</span><span class="p">)</span>
