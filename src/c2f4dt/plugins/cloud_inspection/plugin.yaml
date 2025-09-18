@@ -1,0 +1,6 @@
+name: cloud_inspection
+version: "0.1.0"
+description: "Point cloud metrics & inspection (CloudCompare-inspired)"
+order: 2
+requires: []
+entry_point: "plugin:register"

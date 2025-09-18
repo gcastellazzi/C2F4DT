@@ -24,3 +24,6 @@ isort>=5.13
 
 # Icons
 pillow>=10.0
+
+# Machine learning / neighbors
+scikit-learn>=1.5

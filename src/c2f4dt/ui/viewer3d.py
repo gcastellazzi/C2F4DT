@@ -1765,7 +1765,7 @@ class Viewer3D(QtWidgets.QWidget):
         except Exception:
             pass
     
-        # ---- Public normals setters -------------------------------------------
+    # ---- Public normals setters -------------------------------------------
     def set_normals_style(self, dataset_index: int, style: str) -> None:
         """Set normals color style for a dataset and rebuild if visible."""
         try:
@@ -1904,6 +1904,135 @@ class Viewer3D(QtWidgets.QWidget):
         except Exception:
             pass
 
+    def color_points_by_array(self, dataset_index: int, array_name: str, cmap: str = "viridis", show_scalar_bar: bool = True) -> None:
+        """Color a point dataset by a point-data array and rebuild its actor.
+
+        Args:
+            dataset_index: Index of the target dataset (must be kind == 'points').
+            array_name: Name of the array present in rec['pdata'].point_data.
+            cmap: Matplotlib colormap name (e.g., 'viridis', 'plasma').
+            show_scalar_bar: If True, show scalar bar titled with the array name.
+        """
+        recs = getattr(self, "_datasets", [])
+        if not (isinstance(dataset_index, int) and 0 <= dataset_index < len(recs)):
+            return
+        rec = recs[dataset_index]
+        if rec.get("kind") != "points":
+            return
+
+        pdata = rec.get("pdata")
+        if pdata is None:
+            return
+        try:
+            npts = int(getattr(pdata, "n_points", 0))
+        except Exception:
+            npts = 0
+        if npts <= 0:
+            return
+
+        # Ensure the array exists on pdata
+        try:
+            if not (hasattr(pdata, "point_data") and array_name in pdata.point_data):
+                return
+        except Exception:
+            return
+
+        # Remove previous points actor
+        try:
+            actor = rec.get("actor_points")
+            if actor is not None and hasattr(self, "plotter"):
+                self.plotter.remove_actor(actor)
+        except Exception:
+            pass
+        rec["actor_points"] = None
+
+        # Add a new points actor using the provided scalars
+        try:
+            actor = self.plotter.add_points(
+                pdata,
+                scalars=array_name,
+                cmap=cmap,
+                render_points_as_spheres=bool(rec.get("points_as_spheres", False)),
+                show_scalar_bar=False,
+            )
+            rec["actor_points"] = actor
+            # Keep point size
+            try:
+                size = int(rec.get("point_size", getattr(self, "_point_size", 3)))
+                prop = actor.GetProperty() if actor is not None else None
+                if prop:
+                    prop.SetPointSize(size)
+            except Exception:
+                pass
+        except Exception:
+            return
+
+        # Book-keeping and optional scalar bar
+        rec["color_mode"] = f"PointData/{array_name}"
+        rec["scalar_name"] = array_name
+        rec["cmap"] = cmap
+        try:
+            if show_scalar_bar and hasattr(self, "set_colorbar_mode"):
+                self.set_colorbar_mode(getattr(self, "_scalarbar_mode", "horizontal-br"), title=array_name)
+            elif hasattr(self, "set_colorbar_mode"):
+                self.set_colorbar_mode("hidden")
+        except Exception:
+            pass
+
+        try:
+            if hasattr(self, "plotter"):
+                self.plotter.render()
+        except Exception:
+            pass
+
+
+    def reset_point_coloring(self, dataset_index: int) -> None:
+        """Restore default coloring for a point dataset (Solid/RGB/Intensity heuristic)."""
+        recs = getattr(self, "_datasets", [])
+        if not (isinstance(dataset_index, int) and 0 <= dataset_index < len(recs)):
+            return
+        rec = recs[dataset_index]
+        if rec.get("kind") != "points":
+            return
+
+        # Remove current actor
+        try:
+            actor = rec.get("actor_points")
+            if actor is not None and hasattr(self, "plotter"):
+                self.plotter.remove_actor(actor)
+        except Exception:
+            pass
+        rec["actor_points"] = None
+
+        # Rebuild via helper if available
+        try:
+            actor = None
+            if hasattr(self, "_add_points_by_mode"):
+                actor = self._add_points_by_mode(
+                    rec.get("pdata"),
+                    rec.get("has_rgb", False),
+                    rec.get("solid_color", getattr(self, "_solid_fallback", (200, 200, 200))),
+                    rec.get("color_mode", getattr(self, "_color_mode", "Solid")),
+                    rec.get("cmap", getattr(self, "_cmap", "viridis")),
+                    rec.get("points_as_spheres", getattr(self, "_points_as_spheres", False)),
+                )
+            rec["actor_points"] = actor
+            # Hide scalar bar
+            if hasattr(self, "set_colorbar_mode"):
+                self.set_colorbar_mode("hidden")
+            # Restore point size
+            try:
+                if actor is not None:
+                    prop = actor.GetProperty()
+                    if prop:
+                        prop.SetPointSize(int(rec.get("point_size", getattr(self, "_point_size", 3))))
+            except Exception:
+                pass
+            if hasattr(self, "plotter"):
+                self.plotter.render()
+        except Exception:
+            pass
+        
     def set_mesh_visibility(self, dataset_index: int, visible: bool) -> None:
         """Show or hide a mesh dataset."""
         try:

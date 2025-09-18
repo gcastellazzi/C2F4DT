@@ -1,0 +1,6 @@
+name: cloud2fem
+version: "0.1.0"
+description: "Cloud2FEM Slicing & Grid controls"
+order: 10
+requires: [pyvista]
+entry_point: "plugin:register"

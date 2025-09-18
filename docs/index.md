@@ -1,5 +1,5 @@
 # C2F4DT — Developer Guide
-<img src="assets/logo-cloud2fem.png" alt="C2F4DT Logo" width="300" height="300" align="right"> Welcome to the **C2F4DT** developer documentation. This site collects guidelines, code architecture, theory, and an **auto-generated API reference**.  
+<img src="assets/logo-cloud2fem.png" alt="C2F4DT Logo" width="200" height="200" align="right"> Welcome to the **C2F4DT** developer documentation. This site collects guidelines, code architecture, theory, and an **auto-generated API reference**.  
 
 **C2F4DT** is a modular software package designed as a 3D viewer and interaction environment built on VTK. Its primary goal is to provide a framework where plugins can be developed to visualize and interact with point clouds and finite element models. Within this architecture, **Cloud2FEM** is included as one of the plugins, enabling users to transform point cloud data into finite element meshes.
 
@@ -8,13 +8,15 @@ The concept behind C2F4DT is to serve as a host for digital twins of finite elem
 Future versions will extend the package with additional plugins and extensions, enhancing functionality and enabling more advanced workflows for digital twin management and structural analysis.
 
 ## Features
-<img src="assets/image3.png" alt="C2F4DT Logo" width="300" height="300" align="right">
+
 - Import and preprocess 3D point clouds from multiple formats
 - Slice point clouds into meaningful cross-sections
 - Generate centroids and polygons to represent structural elements
 - Create grids and finite element meshes for structural analysis
 - Define boundary conditions (BCs) and load cases
 - Visualize point clouds, meshes, and simulation results within the tool
+
+<img src="assets/image3.png" alt="C2F4DT Logo" width="300" height="300" align="right">
 
 ## Publications
 
@@ -26,22 +28,42 @@ Cloud2FEMi and its underlying methodologies have been described and validated in
 
 ## Getting Started
 
-To begin exploring Cloud2FEMi, we recommend reviewing the following sections:
-<img src="assets/image4.png" alt="C2F4DT Logo" width="300" height="300" align="right">
-- [Installation](guide/installation.md)
-- [Overview](guide/overview.md)
-- [Theory & Equations](guide/theory.md)
-- [Architecture](guide/architecture.md)
-- [Flowchart](guide/flowchart.md)
+To begin exploring C2F4DT, we recommend reviewing the following sections:
+
+- [Overview](guide/overview.md) 
+- [Installation](guide/installation.md) 
+- [Console Guide](guide/console_guide.md) 
+- [Architecture](guide/architecture.md) 
+- [Flowchart](guide/flowchart.md) 
 
 ## Quick start
+
+To get started with the Cloud2FEM for Digital Twins framework, follow these steps:
+
+- Step 1: Create a virtual environment to isolate dependencies
 ```bash
-# Local preview
-pip install mkdocs-material "mkdocstrings[python]" pymdown-extensions
-mkdocs serve
+python -m venv .venv_c2f4dt
 ```
 
-## Goals
-- Documentation that is easy to evolve during development (Markdown + MathJax)
-- Always up-to-date Python API via **mkdocstrings**
-- Automatic deploy to **GitHub Pages**
+- Step 2: Activate the virtual environment (On Windows, use: .venv_c2f4dt\Scripts\activate)
+```bash
+source .venv_c2f4dt/bin/activate  
+```
+
+- Step 3: Install the required dependencies from the requirements file
+```bash
+pip install -r requirements.txt
+```
+
+- Step 4: Install the current package in editable mode for development purposes
+```bash
+pip install -e .
+```
+
+- Step 5: Run the main script to start the application
+```bash
+python main.py
+```
+
+
+<img src="assets/image4.png" alt="C2F4DT Logo" width="500" height="500" >

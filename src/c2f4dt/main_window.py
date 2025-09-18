@@ -9,6 +9,8 @@ from c2f4dt.utils.theme import apply_user_theme
 from c2f4dt.utils.systeminfo import disk_usage_percent
 from c2f4dt.utils.icons import qicon
 from c2f4dt.plugins.manager import PluginManager
+from c2f4dt.plugins.cloud2fem import Cloud2FEMPlugin
+
 from c2f4dt.ui.console import ConsoleWidget
 from c2f4dt.ui.viewer3d import Viewer3DPlaceholder
 from c2f4dt.ui.display_panel import DisplayPanel
@@ -174,6 +176,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._build_statusbar()
 
         self.plugin_manager = PluginManager(self, plugins_dir=self._default_plugins_dir())
+        
+        self._cloud2fem = Cloud2FEMPlugin(self)
+
         self._populate_plugins_ui()
 
         self._start_disk_timer()
@@ -194,6 +199,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # Tree update guard to avoid cascading on auto-updates/partial states
         # Explicitly ensure the flag exists and starts false
         self._tree_updating = False
+
+        self._mount_cloud2fem_panel()
+        
     def _iter_children(self, item: QtWidgets.QTreeWidgetItem):
         """Yield direct children of *item* safely."""
         for i in range(item.childCount()):
@@ -208,115 +216,115 @@ class MainWindow(QtWidgets.QMainWindow):
             self._tree_updating = False
 
     @QtCore.Slot(QtWidgets.QTreeWidgetItem, int)
-    def _on_tree_item_changed(self, item: QtWidgets.QTreeWidgetItem, column: int) -> None:
-        """
-        Handle checkbox toggles in treeMCTS.
+    # def _on_tree_item_changed(self, item: QtWidgets.QTreeWidgetItem, column: int) -> None:
+    #     """
+    #     Handle checkbox toggles in treeMCTS.
 
-        Behavior:
-        - If 'Tree ➜ Parent check toggles children' is ON, propagate the state to children.
-        - Toggle dataset visibility for nodes that carry {'kind': 'points'|'mesh'|'normals', 'ds': int}.
-        - Ensure actors are (re)created when turning visibility ON.
-        - Keep self.mcts and viewer._datasets['visible'] in sync.
-        """
-        # Guard against programmatic changes
-        if getattr(self, "_tree_updating", False):
-            return
-        try:
-            role = QtCore.Qt.ItemDataRole.UserRole
-            data = item.data(0, role)
-            checked = item.checkState(0) == QtCore.Qt.CheckState.Checked
-            propagate = False
-            try:
-                propagate = bool(self.act_tree_propagate.isChecked())
-            except Exception:
-                propagate = False
+    #     Behavior:
+    #     - If 'Tree ➜ Parent check toggles children' is ON, propagate the state to children.
+    #     - Toggle dataset visibility for nodes that carry {'kind': 'points'|'mesh'|'normals', 'ds': int}.
+    #     - Ensure actors are (re)created when turning visibility ON.
+    #     - Keep self.mcts and viewer._datasets['visible'] in sync.
+    #     """
+    #     # Guard against programmatic changes
+    #     if getattr(self, "_tree_updating", False):
+    #         return
+    #     try:
+    #         role = QtCore.Qt.ItemDataRole.UserRole
+    #         data = item.data(0, role)
+    #         checked = item.checkState(0) == QtCore.Qt.CheckState.Checked
+    #         propagate = False
+    #         try:
+    #             propagate = bool(self.act_tree_propagate.isChecked())
+    #         except Exception:
+    #             propagate = False
 
-            # 1) Propagate to children if requested
-            if propagate:
-                try:
-                    self._tree_updating = True
-                    for ch in self._iter_children(item):
-                        ch.setCheckState(0, QtCore.Qt.CheckState.Checked if checked else QtCore.Qt.CheckState.Unchecked)
-                finally:
-                    self._tree_updating = False
+    #         # 1) Propagate to children if requested
+    #         if propagate:
+    #             try:
+    #                 self._tree_updating = True
+    #                 for ch in self._iter_children(item):
+    #                     ch.setCheckState(0, QtCore.Qt.CheckState.Checked if checked else QtCore.Qt.CheckState.Unchecked)
+    #             finally:
+    #                 self._tree_updating = False
 
-            # 2) If this node maps to a dataset, toggle visibility accordingly
-            if isinstance(data, dict):
-                kind = data.get("kind")
-                ds = data.get("ds")
-                if isinstance(ds, int) and kind in ("points", "mesh", "normals"):
-                    if kind in ("points", "mesh"):
-                        # Main dataset visibility
-                        self._viewer_set_visibility(kind, ds, bool(checked))
-                        # Persist visible flag into cache + session dicts
-                        try:
-                            self._persist_dataset_prop(ds, "visible", bool(checked))
-                        except Exception:
-                            pass
-                        # If we just turned OFF points, force normals OFF for that ds
-                        if kind == "points" and not checked:
-                            try:
-                                self._viewer_set_visibility("normals", ds, False)
-                            except Exception:
-                                pass
-                    elif kind == "normals":
-                        # Normals visibility only if dataset exists
-                        try:
-                            getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, bool(checked))
-                        except Exception:
-                            pass
-                        try:
-                            self._persist_dataset_prop(ds, "normals_visible", bool(checked))
-                        except Exception:
-                            pass
+    #         # 2) If this node maps to a dataset, toggle visibility accordingly
+    #         if isinstance(data, dict):
+    #             kind = data.get("kind")
+    #             ds = data.get("ds")
+    #             if isinstance(ds, int) and kind in ("points", "mesh", "normals"):
+    #                 if kind in ("points", "mesh"):
+    #                     # Main dataset visibility
+    #                     self._viewer_set_visibility(kind, ds, bool(checked))
+    #                     # Persist visible flag into cache + session dicts
+    #                     try:
+    #                         self._persist_dataset_prop(ds, "visible", bool(checked))
+    #                     except Exception:
+    #                         pass
+    #                     # If we just turned OFF points, force normals OFF for that ds
+    #                     if kind == "points" and not checked:
+    #                         try:
+    #                             self._viewer_set_visibility("normals", ds, False)
+    #                         except Exception:
+    #                             pass
+    #                 elif kind == "normals":
+    #                     # Normals visibility only if dataset exists
+    #                     try:
+    #                         getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, bool(checked))
+    #                     except Exception:
+    #                         pass
+    #                     try:
+    #                         self._persist_dataset_prop(ds, "normals_visible", bool(checked))
+    #                     except Exception:
+    #                         pass
 
-            # 3) If a parent WITHOUT explicit kind was toggled, and propagate=False,
-            #    try to reflect the parent checkbox on immediate children that have ds/kind.
-            if (not propagate) and (not isinstance(data, dict)):
-                for ch in self._iter_children(item):
-                    dch = ch.data(0, role)
-                    if isinstance(dch, dict):
-                        kind = dch.get("kind")
-                        ds = dch.get("ds")
-                        if isinstance(ds, int) and kind in ("points", "mesh", "normals"):
-                            # Do not change checkbox UI; only re-sync visibility with current child state
-                            on = ch.checkState(0) == QtCore.Qt.CheckState.Checked
-                            if kind in ("points", "mesh"):
-                                self._viewer_set_visibility(kind, ds, bool(on))
-                            elif kind == "normals":
-                                try:
-                                    getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, bool(on))
-                                except Exception:
-                                    pass
-                            try:
-                                if kind == "normals":
-                                    self._persist_dataset_prop(ds, "normals_visible", bool(on))
-                                else:
-                                    self._persist_dataset_prop(ds, "visible", bool(on))
-                            except Exception:
-                                pass
+    #         # 3) If a parent WITHOUT explicit kind was toggled, and propagate=False,
+    #         #    try to reflect the parent checkbox on immediate children that have ds/kind.
+    #         if (not propagate) and (not isinstance(data, dict)):
+    #             for ch in self._iter_children(item):
+    #                 dch = ch.data(0, role)
+    #                 if isinstance(dch, dict):
+    #                     kind = dch.get("kind")
+    #                     ds = dch.get("ds")
+    #                     if isinstance(ds, int) and kind in ("points", "mesh", "normals"):
+    #                         # Do not change checkbox UI; only re-sync visibility with current child state
+    #                         on = ch.checkState(0) == QtCore.Qt.CheckState.Checked
+    #                         if kind in ("points", "mesh"):
+    #                             self._viewer_set_visibility(kind, ds, bool(on))
+    #                         elif kind == "normals":
+    #                             try:
+    #                                 getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, bool(on))
+    #                             except Exception:
+    #                                 pass
+    #                         try:
+    #                             if kind == "normals":
+    #                                 self._persist_dataset_prop(ds, "normals_visible", bool(on))
+    #                             else:
+    #                                 self._persist_dataset_prop(ds, "visible", bool(on))
+    #                         except Exception:
+    #                             pass
 
-            # 4) Best-effort overlays refresh and viewer refresh
-            try:
-                self._reapply_overlays_safe()
-            except Exception:
-                pass
-            try:
-                self.viewer3d.refresh()
-            except Exception:
-                pass
-        except Exception:
-            # Avoid breaking the UI due to unexpected data
-            pass
+    #         # 4) Best-effort overlays refresh and viewer refresh
+    #         try:
+    #             self._reapply_overlays_safe()
+    #         except Exception:
+    #             pass
+    #         try:
+    #             self.viewer3d.refresh()
+    #         except Exception:
+    #             pass
+    #     except Exception:
+    #         # Avoid breaking the UI due to unexpected data
+    #         pass
 
-        # 3D view preferences (dataclass-like dict, for settings dialog)
-        self._view_prefs = {
-            "bg": (82, 87, 110),
-            "grid": True,
-            "points_as_spheres": False,
-            "colorbar_mode": "vertical-tr",
-            "colorbar_title": "",
-        }
+    #     # 3D view preferences (dataclass-like dict, for settings dialog)
+    #     self._view_prefs = {
+    #         "bg": (82, 87, 110),
+    #         "grid": True,
+    #         "points_as_spheres": False,
+    #         "colorbar_mode": "vertical-tr",
+    #         "colorbar_title": "",
+    #     }
 
     def _schedule_scene_rebuild(self, delay_ms: int = 60) -> None:
         """Schedule a single full-scene rebuild after a short delay (debounced)."""
@@ -555,6 +563,23 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         )
 
+    def _mount_cloud2fem_panel(self):
+        """Mount Cloud2FEM panel into right toolbar."""
+        try:
+            hooks = HostHooks(
+                window=self,
+                viewer3d=self.viewer3d,
+                log=lambda lvl, msg: self.txtMessages.appendPlainText(f"[{lvl}] {msg}"),
+                progress_begin=lambda title: self._progress_start(title),
+                progress_update=lambda p, m: self._import_progress_update(percent=p, message=m),
+                progress_end=lambda: self._progress_finish(),
+                add_badge=lambda name, txt: self.statusBar().showMessage(f"{name}: {txt}", 2000),
+            )
+            self._cloud2fem.mount(hooks)
+        except Exception:
+            pass
+
+    
 
     def _build_central_area(self) -> None:
         central = QtWidgets.QWidget(self)
@@ -2444,13 +2469,13 @@ class MainWindow(QtWidgets.QMainWindow):
                     if callable(fn) and _call_safe(fn):
                         return
 
-            QtWidgets.QMessageBox.information(self, "Plugin", f"Plugin '{key}' non espone azioni note.")
+            QtWidgets.QMessageBox.information(self, "Plugin", f"Plugin '{key}' does not expose any known actions.")
         except Exception as ex:
             QtWidgets.QMessageBox.critical(self, "Plugin error", str(ex))
 
     def _invoke_plugin_action(self, plugin, action_desc, ctx: dict) -> None:
-        """Esegue una singola azione del plugin, descritta come dict:
-           {'label': 'Do X', 'slot': callable} oppure {'label':..., 'method': 'run'}.
+        """Executes a single plugin action described as a dictionary:
+           {'label': 'Do X', 'slot': callable} or {'label': ..., 'method': 'run'}.
         """
         try:
             slot = action_desc.get("slot")

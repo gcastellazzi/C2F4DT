@@ -10,20 +10,20 @@
 1. Open the C2F4DT folder in VS Code.
 2. Open the terminal (`Ctrl+``).
 3. Create a virtual environment:
-   ```bash
-   python -m venv .venv
-   ```
+  ```bash
+  python -m venv venv_c2f4dt
+  ```
 4. Activate the environment:
-   - On macOS/Linux:
-     ```bash
-     source .venv/bin/activate
-     ```
-   - On Windows:
-     ```bash
-     .venv\Scripts\activate
-     ```
+  - On macOS/Linux:
+    ```bash
+    source venv_c2f4dt/bin/activate
+    ```
+  - On Windows:
+    ```bash
+    venv_c2f4dt\Scripts\activate
+    ```
 
-VS Code should auto-detect the `.venv`. If not, select it manually (`Python: Select Interpreter`).
+VS Code should auto-detect the `venv_c2f4dt`. If not, select it manually (`Python: Select Interpreter`).
 
 ## Installing Packages
 Once the environment is active, install dependencies:
@@ -32,10 +32,26 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-For development mode:
+
+## Activating in Regular or Development Mode
+
+### Regular Mode
+To activate the application in regular mode, run:
+```bash
+pip install .
+```
+
+### Development Mode
+For development mode, which includes additional tools and dependencies for development, run:
 ```bash
 pip install -e .[dev]
 ```
+
+You can also activate in user mode (without requiring administrative privileges):
+```bash
+pip install --user .
+```
+
 
 ## Running the Application
 - To launch the main app:
@@ -72,11 +88,11 @@ git checkout -b feature/my-change
   git commit -m "fix: corrected normals orientation in slice viewer"
   ```
 - **Do not commit**:
-  - `.venv/`
+  - `venv_c2f4dt/`
   - large datasets
   - build artifacts
 
-Make sure `.gitignore` includes `.venv/`, `__pycache__/`, and `site/`.
+Make sure `.gitignore` includes `venv_c2f4dt/`, `__pycache__/`, and `site/`.
 
 ## Pushing Changes
 ```bash
@@ -84,3 +100,4 @@ git push origin feature/my-change
 ```
 
 Then open a Pull Request on GitHub.
+

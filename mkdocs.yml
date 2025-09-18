@@ -45,7 +45,9 @@ plugins:
 watch:
 - src
 nav:
-- Home: index.md
+- Home: 
+  - C2F4DT: index.md
+  - References: guide/reference.md
 - Guide:
   - Overview: guide/overview.md
   - Installation: guide/installation.md
@@ -53,8 +55,14 @@ nav:
   - Code Tree: guide/code_tree.md
   - Flowchart: guide/flowchart.md
   - Gui Layout: guide/gui_layout.md
-  - Theory: guide/theory.md
   - Plugins Developer Guide: guide/plugins_developer_guide.md
+  - Console Guide: guide/console_guide.md
+- Plugins:
+  - Units: guide/plugins/units.md
+  - Cloud metrics: guide/plugins/cloud_inspection.md
+  - Transform RT: guide/plugins/transformations.md
+  - VTK Import: guide/plugins/import_vtk.md
+  - Cloud2FEM: guide/plugins/cloud2fem.md
 - API Reference:
   - Index: api/index.md
   - c2f4dt: api/c2f4dt.md

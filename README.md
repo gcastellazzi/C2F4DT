@@ -38,3 +38,5 @@ These steps will set up the environment and launch the application for developme
 Project documentation is available at: https://gcastellazzi.github.io/C2F4DT/
 
 The documentation includes detailed information about the project, setup instructions, usage examples, and API references. It is designed to help you get started quickly and understand the full capabilities of the Cloud2FEM for Digital Twins framework.
+
+See [CHANGELOG](CHANGELOG.md) for details on recent updates.
