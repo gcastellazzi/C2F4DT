@@ -10,6 +10,7 @@ from c2f4dt.utils.systeminfo import disk_usage_percent
 from c2f4dt.utils.icons import qicon
 from c2f4dt.plugins.manager import PluginManager
 from c2f4dt.plugins.cloud2fem import Cloud2FEMPlugin
+from c2f4dt.extensions.manager import ExtensionManager
 
 from c2f4dt.ui.console import ConsoleWidget
 from c2f4dt.ui.viewer3d import Viewer3DPlaceholder
@@ -172,6 +173,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self._build_actions()
         self._build_menus()
         self._build_toolbars()
+        # --- Extensions: create manager and combo BEFORE central area so the bar can host it ---
+        self.ext_manager = ExtensionManager(self)  # auto-discover ../C2F4DT_dev etc.
+        self.cboExtensions = QtWidgets.QComboBox()
+        self.cboExtensions.setObjectName("cboExtensions")
+        self.cboExtensions.addItem("Extensions…", "__none__")
+        for it in self.ext_manager.available_extensions():
+            self.cboExtensions.addItem(it["label"], it["key"])
+            self.cboExtensions.setItemData(self.cboExtensions.count()-1, it["tooltip"], QtCore.Qt.ToolTipRole)
+        self.cboExtensions.currentIndexChanged.connect(self._on_run_extension)
+        # Build/refresh the Extensions menu in the menubar now that manager/combo exist
+        self._rebuild_extensions_menu()
         self._build_central_area()
         self._build_statusbar()
 
@@ -181,6 +193,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._populate_plugins_ui()
 
+        # Build/refresh the Plugins menu now and whenever it opens
+        try:
+            self.m_plugins.aboutToShow.connect(self._rebuild_plugins_menu)
+        except Exception:
+            pass
+        self._rebuild_plugins_menu()
+
+        
+        # 
         self._start_disk_timer()
 
         # Debouncer to rebuild the 3D scene once after bursts of changes
@@ -216,115 +237,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._tree_updating = False
 
     @QtCore.Slot(QtWidgets.QTreeWidgetItem, int)
-    # def _on_tree_item_changed(self, item: QtWidgets.QTreeWidgetItem, column: int) -> None:
-    #     """
-    #     Handle checkbox toggles in treeMCTS.
-
-    #     Behavior:
-    #     - If 'Tree ➜ Parent check toggles children' is ON, propagate the state to children.
-    #     - Toggle dataset visibility for nodes that carry {'kind': 'points'|'mesh'|'normals', 'ds': int}.
-    #     - Ensure actors are (re)created when turning visibility ON.
-    #     - Keep self.mcts and viewer._datasets['visible'] in sync.
-    #     """
-    #     # Guard against programmatic changes
-    #     if getattr(self, "_tree_updating", False):
-    #         return
-    #     try:
-    #         role = QtCore.Qt.ItemDataRole.UserRole
-    #         data = item.data(0, role)
-    #         checked = item.checkState(0) == QtCore.Qt.CheckState.Checked
-    #         propagate = False
-    #         try:
-    #             propagate = bool(self.act_tree_propagate.isChecked())
-    #         except Exception:
-    #             propagate = False
-
-    #         # 1) Propagate to children if requested
-    #         if propagate:
-    #             try:
-    #                 self._tree_updating = True
-    #                 for ch in self._iter_children(item):
-    #                     ch.setCheckState(0, QtCore.Qt.CheckState.Checked if checked else QtCore.Qt.CheckState.Unchecked)
-    #             finally:
-    #                 self._tree_updating = False
-
-    #         # 2) If this node maps to a dataset, toggle visibility accordingly
-    #         if isinstance(data, dict):
-    #             kind = data.get("kind")
-    #             ds = data.get("ds")
-    #             if isinstance(ds, int) and kind in ("points", "mesh", "normals"):
-    #                 if kind in ("points", "mesh"):
-    #                     # Main dataset visibility
-    #                     self._viewer_set_visibility(kind, ds, bool(checked))
-    #                     # Persist visible flag into cache + session dicts
-    #                     try:
-    #                         self._persist_dataset_prop(ds, "visible", bool(checked))
-    #                     except Exception:
-    #                         pass
-    #                     # If we just turned OFF points, force normals OFF for that ds
-    #                     if kind == "points" and not checked:
-    #                         try:
-    #                             self._viewer_set_visibility("normals", ds, False)
-    #                         except Exception:
-    #                             pass
-    #                 elif kind == "normals":
-    #                     # Normals visibility only if dataset exists
-    #                     try:
-    #                         getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, bool(checked))
-    #                     except Exception:
-    #                         pass
-    #                     try:
-    #                         self._persist_dataset_prop(ds, "normals_visible", bool(checked))
-    #                     except Exception:
-    #                         pass
-
-    #         # 3) If a parent WITHOUT explicit kind was toggled, and propagate=False,
-    #         #    try to reflect the parent checkbox on immediate children that have ds/kind.
-    #         if (not propagate) and (not isinstance(data, dict)):
-    #             for ch in self._iter_children(item):
-    #                 dch = ch.data(0, role)
-    #                 if isinstance(dch, dict):
-    #                     kind = dch.get("kind")
-    #                     ds = dch.get("ds")
-    #                     if isinstance(ds, int) and kind in ("points", "mesh", "normals"):
-    #                         # Do not change checkbox UI; only re-sync visibility with current child state
-    #                         on = ch.checkState(0) == QtCore.Qt.CheckState.Checked
-    #                         if kind in ("points", "mesh"):
-    #                             self._viewer_set_visibility(kind, ds, bool(on))
-    #                         elif kind == "normals":
-    #                             try:
-    #                                 getattr(self.viewer3d, "set_normals_visibility", lambda *_: None)(ds, bool(on))
-    #                             except Exception:
-    #                                 pass
-    #                         try:
-    #                             if kind == "normals":
-    #                                 self._persist_dataset_prop(ds, "normals_visible", bool(on))
-    #                             else:
-    #                                 self._persist_dataset_prop(ds, "visible", bool(on))
-    #                         except Exception:
-    #                             pass
-
-    #         # 4) Best-effort overlays refresh and viewer refresh
-    #         try:
-    #             self._reapply_overlays_safe()
-    #         except Exception:
-    #             pass
-    #         try:
-    #             self.viewer3d.refresh()
-    #         except Exception:
-    #             pass
-    #     except Exception:
-    #         # Avoid breaking the UI due to unexpected data
-    #         pass
-
-    #     # 3D view preferences (dataclass-like dict, for settings dialog)
-    #     self._view_prefs = {
-    #         "bg": (82, 87, 110),
-    #         "grid": True,
-    #         "points_as_spheres": False,
-    #         "colorbar_mode": "vertical-tr",
-    #         "colorbar_title": "",
-    #     }
+    
 
     def _schedule_scene_rebuild(self, delay_ms: int = 60) -> None:
         """Schedule a single full-scene rebuild after a short delay (debounced)."""
@@ -391,6 +304,123 @@ class MainWindow(QtWidgets.QMainWindow):
         base = os.path.dirname(os.path.dirname(__file__))  # .../C2F4DT/c2f4dt
         return os.path.join(base, "c2f4dt/plugins")
 
+    def _on_run_extension(self, idx: int) -> None:
+        """Run selected extension and reset the combo to placeholder."""
+        key = self.cboExtensions.itemData(idx)
+        if not key or key == "__none__":
+            return
+        try:
+            ok = self.ext_manager.run(key)
+            if ok and hasattr(self, "txtMessages"):
+                self.txtMessages.appendPlainText(f"[extensions] ran: {key}")
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Extension Error", str(exc))
+        finally:
+            self.cboExtensions.blockSignals(True)
+            self.cboExtensions.setCurrentIndex(0)
+            self.cboExtensions.blockSignals(False)
+
+    def _rebuild_extensions_menu(self) -> None:
+        """(Re)build the Extensions menu with available external extensions.
+
+        Uses a persistent `self.m_extensions` created in _build_menus so the
+        menu does not disappear or get replaced.
+        """
+        mb = self.menuBar() if hasattr(self, "menuBar") else None
+        if mb is None:
+            return
+
+        menu = getattr(self, "m_extensions", None)
+        if menu is None:
+            # Fallback: ricrea e attacca
+            self.m_extensions = mb.addMenu("&Extensions")
+            try:
+                self.m_extensions.setToolTipsVisible(True)
+            except Exception:
+                pass
+            menu = self.m_extensions
+
+        # Assicurati che sia attaccato al menubar (alcuni stili lo possono staccare su clear)
+        try:
+            if menu not in [a.menu() for a in mb.actions() if a.menu() is not None]:
+                mb.addMenu(menu)
+            menu.menuAction().setVisible(True)
+        except Exception:
+            pass
+
+        # Pulisci e ripopola
+        menu.clear()
+
+        items = self.ext_manager.available_extensions() if hasattr(self, "ext_manager") else []
+        if not items:
+            act_none = QtGui.QAction("No extensions found", self)
+            act_none.setEnabled(False)
+            menu.addAction(act_none)
+        else:
+            for it in items:
+                key = it.get("key")
+                label = it.get("label") or key
+                act = QtGui.QAction(label, self)
+                act.setToolTip(it.get("tooltip", label))
+                act.triggered.connect(lambda checked=False, k=key: self._run_extension_from_menu(k))
+                menu.addAction(act)
+
+        # Separator + Reload
+        menu.addSeparator()
+        act_reload = QtGui.QAction("Reload", self)
+        act_reload.setToolTip("Rescan extension folders and refresh this menu")
+        act_reload.triggered.connect(self._reload_extensions)
+        menu.addAction(act_reload)
+
+    def _run_extension_from_menu(self, key: str) -> None:
+        """Execute an extension selected from the menu and mirror selection on combo.
+
+        Args:
+            key: Extension key as returned by ExtensionManager.available_extensions().
+        """
+        try:
+            # Run via manager
+            if hasattr(self, "ext_manager") and self.ext_manager.run(key):
+                if hasattr(self, "txtMessages"):
+                    self.txtMessages.appendPlainText(f"[extensions] ran: {key}")
+            # Mirror selection in combo if present
+            if hasattr(self, "cboExtensions") and isinstance(self.cboExtensions, QtWidgets.QComboBox):
+                idx = self.cboExtensions.findData(key)
+                if idx >= 0:
+                    self.cboExtensions.blockSignals(True)
+                    self.cboExtensions.setCurrentIndex(idx)
+                    self.cboExtensions.blockSignals(False)
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Extension Error", str(exc))
+
+    def _reload_extensions(self) -> None:
+        """Rescan extension directories and refresh combo + menu.
+
+        This will rebuild the ExtensionManager, repopulate the combo box, and
+        call _rebuild_extensions_menu() to reflect the new list.
+        """
+        try:
+            # Recreate the manager to force a fresh discovery
+            self.ext_manager = ExtensionManager(self)
+
+            # Refresh combo if present
+            if hasattr(self, "cboExtensions") and isinstance(self.cboExtensions, QtWidgets.QComboBox):
+                self.cboExtensions.blockSignals(True)
+                self.cboExtensions.clear()
+                self.cboExtensions.addItem("Extensions…", "__none__")
+                for it in self.ext_manager.available_extensions():
+                    self.cboExtensions.addItem(it["label"], it["key"])
+                    self.cboExtensions.setItemData(self.cboExtensions.count()-1, it["tooltip"], QtCore.Qt.ToolTipRole)
+                self.cboExtensions.blockSignals(False)
+
+            # Rebuild menu
+            self._rebuild_extensions_menu()
+
+            if hasattr(self, "txtMessages"):
+                self.txtMessages.appendPlainText("[extensions] reloaded")
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Extensions Reload Error", str(exc))
+            
     def _build_actions(self) -> None:
         self.act_new = QtGui.QAction(qicon("32x32_document-new.png"), "New", self)
         self.act_new.setShortcut(QtGui.QKeySequence.New)
@@ -465,7 +495,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.m_plugins = menubar.addMenu("&Plugins")
         self.m_plugins.setToolTipsVisible(True)
         self.m_plugins_about_to_show = False
-        
+        try:
+            self.m_plugins.menuAction().setVisible(True)
+        except Exception:
+            pass
+
+        # Ensure an Extensions menu placeholder exists and keep it persistent
+        self.m_extensions = menubar.addMenu("&Extensions")
+        self.m_extensions.setToolTipsVisible(True)
+        try:
+            self.m_extensions.menuAction().setVisible(True)
+        except Exception:
+            pass
 
         # Rendering submenu
         self.act_safe_render = QtGui.QAction("Safe Rendering (macOS)", self)
@@ -617,22 +658,23 @@ class MainWindow(QtWidgets.QMainWindow):
         split.addWidget(self.scrollDISPLAY)
 
         v.addWidget(split)
-        self.tabINTERACTION.addTab(self.tabDISPLAY, "DISPLAY")
+        self.tabINTERACTION.addTab(self.tabDISPLAY, "Display")
 
         self.tabSLICING = QtWidgets.QWidget()
-        v2 = QtWidgets.QVBoxLayout(self.tabSLICING)
+        v2 = QtWidgets.QVBoxLayout(self.tabSLICING); v2.setContentsMargins(4, 4, 4, 4)
+        v2.setSpacing(4)
         self.scrollSLICING = QtWidgets.QScrollArea(); self.scrollSLICING.setWidgetResizable(True)
         v2.addWidget(self.scrollSLICING)
-        self.tabINTERACTION.addTab(self.tabSLICING, "SLICING")
+        self.tabINTERACTION.addTab(self.tabSLICING, "Slicing")
 
         self.tabFEM = QtWidgets.QWidget()
-        v3 = QtWidgets.QVBoxLayout(self.tabFEM)
+        v3 = QtWidgets.QVBoxLayout(self.tabFEM); v3.setContentsMargins(4, 4, 4, 4)
         self.scrollFEM = QtWidgets.QScrollArea(); self.scrollFEM.setWidgetResizable(True)
         v3.addWidget(self.scrollFEM)
         self.tabINTERACTION.addTab(self.tabFEM, "FEM")
 
         self.tabINSPECTOR = QtWidgets.QWidget()
-        v4 = QtWidgets.QVBoxLayout(self.tabINSPECTOR)
+        v4 = QtWidgets.QVBoxLayout(self.tabINSPECTOR); v4.setContentsMargins(4, 4, 4, 4)
 
         # Top bar with a Refresh button for the Inspector
         bar_ins = QtWidgets.QHBoxLayout()
@@ -653,7 +695,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Hook up refresh
         self.btnRefreshInspector.clicked.connect(self._refresh_inspector_tree)
 
-        self.tabINTERACTION.addTab(self.tabINSPECTOR, "INSPECTOR")
+        self.tabINTERACTION.addTab(self.tabINSPECTOR, "Inspector")
 
         viewer_container = QtWidgets.QWidget()
         viewer_layout = QtWidgets.QVBoxLayout(viewer_container)
@@ -664,6 +706,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.comboPlugins.addItem("— No plugins installed —"); self.comboPlugins.setEnabled(False)
         bar_plugin.addWidget(QtWidgets.QLabel("Plugin scope:"))
         bar_plugin.addWidget(self.comboPlugins, 1)
+        # --- Extensions combo placed next to Plugins combo ---
+        if hasattr(self, "cboExtensions") and isinstance(self.cboExtensions, QtWidgets.QComboBox):
+            bar_plugin.addSpacing(12)
+            bar_plugin.addWidget(QtWidgets.QLabel("Extensions:"))
+            bar_plugin.addWidget(self.cboExtensions, 1)
         self.comboPlugins.activated.connect(self._on_plugin_combo_activated)
         
         viewer_layout.addLayout(bar_plugin)
@@ -2503,63 +2550,63 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as ex:
             QtWidgets.QMessageBox.critical(self, "Plugin action error", str(ex))
 
-    def _rebuild_plugins_menu(self, items: list[dict]) -> None:
-        """Rigenera il menù &Plugins con le azioni dei plugin."""
-        if not hasattr(self, "m_plugins") or self.m_plugins is None:
-            return
-        self.m_plugins.clear()
-        if not items:
-            act = QtGui.QAction("No plugins installed", self)
-            act.setEnabled(False)
-            self.m_plugins.addAction(act)
-            return
+    # def _rebuild_plugins_menu(self, items: list[dict]) -> None:
+    #     """Rigenera il menù &Plugins con le azioni dei plugin."""
+    #     if not hasattr(self, "m_plugins") or self.m_plugins is None:
+    #         return
+    #     self.m_plugins.clear()
+    #     if not items:
+    #         act = QtGui.QAction("No plugins installed", self)
+    #         act.setEnabled(False)
+    #         self.m_plugins.addAction(act)
+    #         return
 
-        for it in items:
-            key = it.get("key")
-            label = it.get("label", key or "Plugin")
-            tooltip = it.get("tooltip", "")
-            enabled = bool(it.get("enabled", True))
+    #     for it in items:
+    #         key = it.get("key")
+    #         label = it.get("label", key or "Plugin")
+    #         tooltip = it.get("tooltip", "")
+    #         enabled = bool(it.get("enabled", True))
 
-            submenu = QtWidgets.QMenu(label, self.m_plugins)
-            submenu.setEnabled(enabled)
-            if tooltip:
-                submenu.setToolTipsVisible(True)
-                submenu.setToolTip(tooltip)
+    #         submenu = QtWidgets.QMenu(label, self.m_plugins)
+    #         submenu.setEnabled(enabled)
+    #         if tooltip:
+    #             submenu.setToolTipsVisible(True)
+    #             submenu.setToolTip(tooltip)
 
-            # prova a ottenere il plugin e le sue azioni
-            plugin = None
-            get_fn = getattr(self.plugin_manager, "get", None)
-            if callable(get_fn):
-                try:
-                    plugin = get_fn(key)
-                except Exception:
-                    plugin = None
-            actions = None
-            if plugin is not None:
-                for attr in ("actions", "get_actions"):
-                    getter = getattr(plugin, attr, None)
-                    if callable(getter):
-                        try:
-                            actions = getter()
-                        except Exception:
-                            actions = None
-                        break
+    #         # prova a ottenere il plugin e le sue azioni
+    #         plugin = None
+    #         get_fn = getattr(self.plugin_manager, "get", None)
+    #         if callable(get_fn):
+    #             try:
+    #                 plugin = get_fn(key)
+    #             except Exception:
+    #                 plugin = None
+    #         actions = None
+    #         if plugin is not None:
+    #             for attr in ("actions", "get_actions"):
+    #                 getter = getattr(plugin, attr, None)
+    #                 if callable(getter):
+    #                     try:
+    #                         actions = getter()
+    #                     except Exception:
+    #                         actions = None
+    #                     break
 
-            if isinstance(actions, (list, tuple)) and actions:
-                # crea QAction per ciascuna azione
-                for a in actions:
-                    q = QtGui.QAction(str(a.get("label", "Action")), self)
-                    q.setToolTip(str(a.get("tooltip", "")))
-                    q.triggered.connect(lambda _=False, plug=plugin, desc=a: self._invoke_plugin_action(plug, desc, self._plugin_context()))
-                    submenu.addAction(q)
-            else:
-                # azione di default: Run <label>
-                run_act = QtGui.QAction(f"Run {label}", self)
-                run_act.setToolTip("Execute default entry-point")
-                run_act.triggered.connect(lambda _=False, k=key: self._run_plugin_by_key(k))
-                submenu.addAction(run_act)
+    #         if isinstance(actions, (list, tuple)) and actions:
+    #             # crea QAction per ciascuna azione
+    #             for a in actions:
+    #                 q = QtGui.QAction(str(a.get("label", "Action")), self)
+    #                 q.setToolTip(str(a.get("tooltip", "")))
+    #                 q.triggered.connect(lambda _=False, plug=plugin, desc=a: self._invoke_plugin_action(plug, desc, self._plugin_context()))
+    #                 submenu.addAction(q)
+    #         else:
+    #             # azione di default: Run <label>
+    #             run_act = QtGui.QAction(f"Run {label}", self)
+    #             run_act.setToolTip("Execute default entry-point")
+    #             run_act.triggered.connect(lambda _=False, k=key: self._run_plugin_by_key(k))
+    #             submenu.addAction(run_act)
 
-            self.m_plugins.addMenu(submenu)
+    #         self.m_plugins.addMenu(submenu)
 
 
     def _on_undo_changed(self) -> None:
@@ -3961,3 +4008,84 @@ class MainWindow(QtWidgets.QMainWindow):
         # Apply immediately for Apply/OK
         if code == 2 or code == QtWidgets.QDialog.Accepted:
             _apply(dlg.values())
+            
+    def _rebuild_plugins_menu(self) -> None:
+        """(Re)build the Plugins menu from PluginManager.ui_combo_items()."""
+        try:
+            m = getattr(self, "m_plugins", None)
+            pm = getattr(self, "plugin_manager", None)
+            if m is None or pm is None:
+                return
+            m.clear()
+            items = []
+            try:
+                items = pm.ui_combo_items()
+            except Exception:
+                items = []
+            if not items:
+                act = QtGui.QAction("No plugins installed", self)
+                act.setEnabled(False)
+                m.addAction(act)
+                return
+            for it in items:
+                key = it.get("key")
+                label = it.get("label") or key
+                enabled = bool(it.get("enabled", True))
+                tip = it.get("tooltip", label)
+                act = QtGui.QAction(label, self)
+                act.setEnabled(enabled)
+                act.setToolTip(tip)
+                # bind key now using default arg
+                act.triggered.connect(lambda checked=False, k=key: self._run_plugin_from_menu(k))
+                m.addAction(act)
+        except Exception:
+            pass
+
+    def _run_plugin_from_menu(self, key: str) -> None:
+        """Execute a plugin selected from the Plugins menu and mirror selection in the combo if present."""
+        try:
+            pm = getattr(self, "plugin_manager", None)
+            if pm is None:
+                return
+            ok = False
+            for method in ("run", "execute", "exec"):
+                try:
+                    # Our PluginManager exposes `run(key, **ctx)`; fallback to get()+call
+                    if hasattr(pm, method) and callable(getattr(pm, method)):
+                        ok = bool(getattr(pm, method)(key))
+                        break
+                except Exception:
+                    pass
+            if not ok:
+                # fallback: retrieve and try to call standard entry methods
+                try:
+                    obj = pm.get(key)
+                    if obj is not None:
+                        for mname in ("run", "execute", "exec", "show", "__call__"):
+                            fn = getattr(obj, mname, None)
+                            if callable(fn):
+                                try:
+                                    fn(self)
+                                except TypeError:
+                                    fn()
+                                ok = True
+                                break
+                except Exception:
+                    pass
+            if ok and hasattr(self, "txtMessages"):
+                self.txtMessages.appendPlainText(f"[plugins] ran: {key}")
+
+            # Mirror selection in comboPlugins if present
+            try:
+                combo = getattr(self, "comboPlugins", None)
+                if isinstance(combo, QtWidgets.QComboBox):
+                    idx = -1
+                    for i in range(combo.count()):
+                        if combo.itemData(i) == key or combo.itemText(i) == key:
+                            idx = i; break
+                    if idx >= 0:
+                        combo.setCurrentIndex(idx)
+            except Exception:
+                pass
+        except Exception as exc:
+            QtWidgets.QMessageBox.critical(self, "Plugin Error", str(exc))

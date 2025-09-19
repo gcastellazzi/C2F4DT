@@ -112,29 +112,24 @@ def _add_to_slicing_panel(window, title: str, widget: QtWidgets.QWidget) -> None
             if container.layout() is None:
                 container.setLayout(QtWidgets.QVBoxLayout())
 
-            # If already present, do not add again
+            # If already present, do not add again (look for our inner widget)
             try:
-                for gb in container.findChildren(QtWidgets.QGroupBox):
-                    if gb.objectName() == "cloud2fem.slicing_box":
+                for w in container.findChildren(QtWidgets.QWidget):
+                    if w.objectName() == "cloud2fem.slicing_widget":
                         return
             except Exception:
                 pass
 
-            # Fallback: wrap the widget in a QGroupBox and append it to the main vertical layout.
-            box = QtWidgets.QGroupBox(title)
-            box.setObjectName("cloud2fem.slicing_box")
-            box.setMaximumWidth(300)
-            lay = QtWidgets.QVBoxLayout(box)
-            lay.setContentsMargins(8, 8, 8, 8)
-            lay.addWidget(widget)
-            # Enforce the same layout/size policies as VTK box
+            # Boxless fallback: append the widget directly to the container's main layout
             widget.setObjectName("cloud2fem.slicing_widget")
-            widget.setMaximumWidth(300)
+            widget.setMaximumWidth(320)
             widget.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
-            box.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
-
-            container.layout().addWidget(box)
-            container.layout().addStretch(0)
+            container.layout().addWidget(widget)
+            # keep a little stretch to push content to top (but avoid duplicates)
+            # ensure only one final stretch exists
+            stretches = [container.layout().itemAt(i) for i in range(container.layout().count())]
+            if not stretches or stretches[-1] is None or stretches[-1].spacerItem() is None:
+                container.layout().addStretch(0)
             try:
                 window._cloud2fem_slicing_installed = True  # type: ignore[attr-defined]
             except Exception:
@@ -204,6 +199,7 @@ class Cloud2FEMPlugin(QtCore.QObject):
         tb = None
         for attr in ("barVERTICAL_right", "right_toolbar", "toolBarRight"):
             tb = getattr(self.window, attr, None)
+            tb.addSeparator() if tb is not None else None
             if isinstance(tb, QtWidgets.QToolBar):
                 break
         if tb is None:
@@ -240,9 +236,17 @@ class Cloud2FEMPlugin(QtCore.QObject):
         self.actPolylines= add_toggle("Polylines",      "32x32_cloud_polylines_3D.png",      lambda v: self.panel.set_visibility("polylines", v), "cloud2fem.actPolylines")
         self.actPolygons = add_toggle("Polygons",       "32x32_cloud_polygon_3D.png",        lambda v: self.panel.set_visibility("polygons", v),  "cloud2fem.actPolygons")
         self.actMesh     = add_toggle("C2F mesh",       "32x32_cloud_mesh_3D.png",           lambda v: self.panel.set_visibility("mesh", v),      "cloud2fem.actMesh")
+        self.actPlanes   = add_toggle("Section planes", "32x32_3D_section_planes.png",       lambda v: self.panel.set_visibility("planes", v),    "cloud2fem.actPlanes" )
 
+        prop = _find_action("cloud2fem.actProps")
+        if prop is None:
+            prop = QtGui.QAction(self._qicon("32x32_applications-system.png"),
+                                "Cloud2FEM display properties", self.window)
+            prop.setObjectName("cloud2fem.actProps")
+            prop.triggered.connect(self.panel._on_open_display_props)
+            tb.addAction(prop)
         # Sensible defaults
-        for act in (self.actSlices, self.actCurrent, self.actCentroids, self.actPolylines, self.actPolygons):
+        for act in (self.actPlanes, self.actSlices, self.actCurrent, self.actCentroids, self.actPolylines, self.actPolygons):
             act.setChecked(True)
         self.actMesh.setChecked(False)
 
@@ -353,6 +357,42 @@ class SlicingPanel(QtWidgets.QWidget):
             self._opts = {}
         self._slices: list[dict] = []
         self._vis = {"slices": True, "current": True, "centroids": True, "polylines": True, "polygons": True, "mesh": False}
+        # Runtime overlays storage (actors/ids handled by the viewer/plotter)
+        self._actors = {
+            "slices": [],
+            "current": [],
+            "centroids": [],
+            "polylines": [],
+            "polygons": [],
+            "mesh": [],
+        }
+        # Visibility channels (planes, per-slice products)
+        self._vis = {
+            "planes": True,      # NEW: section planes only
+            "slices": True,      # slice points
+            "current": True,
+            "centroids": True,
+            "polylines": True,
+            "polygons": True,
+            "mesh": False,
+        }
+        # Basic style defaults (editable via properties dialog)
+        self._style = {
+            "point_size_factor": 2.0,      # multiplier over viewer's default
+            "centroid_size": 12.0,
+            "planes_opacity": 0.18,
+            "current_plane_opacity": 0.35,
+            "line_width": 2.0,             # polylines width
+            "poly_opacity": 0.25,          # polygons fill opacity
+            "poly_edge_width": 1.5,        # polygons outline width
+            # axis colors (R,G,B)
+            "color_x": (1.0, 0.25, 0.25),
+            "color_y": (0.25, 1.0, 0.25),
+            "color_z": (0.25, 0.5, 1.0),
+        }
+        # Track if user explicitly set thickness (avoid auto-reset on compute)
+        self._setting_thickness = False   # internal guard for programmatic sets
+        self._thickness_user_set = False  # becomes True when user edits the spinbox
         self._build_ui()
         self._init_defaults()
 
@@ -360,11 +400,28 @@ class SlicingPanel(QtWidgets.QWidget):
     def _build_ui(self) -> None:
         """Build the full vertical layout for slicing controls."""
         lay = QtWidgets.QVBoxLayout(self)
-        lay.setContentsMargins(8, 8, 8, 8)
-        lay.setSpacing(8)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
 
+        # Quick view filter box (axis visibility for products) -------------
+        grp_view = QtWidgets.QGroupBox("View Slices")
+        grp_view.setMaximumWidth(276)
+        hv = QtWidgets.QHBoxLayout(grp_view)
+        self.chkViewX = QtWidgets.QCheckBox("X"); self.chkViewX.setChecked(True)
+        self.chkViewY = QtWidgets.QCheckBox("Y"); self.chkViewY.setChecked(True)
+        self.chkViewZ = QtWidgets.QCheckBox("Z"); self.chkViewZ.setChecked(True)
+        self.chkViewAll = QtWidgets.QCheckBox("All"); self.chkViewAll.setChecked(True)
+        for w in (self.chkViewX, self.chkViewY, self.chkViewZ, self.chkViewAll):
+            hv.addWidget(w)
+        lay.addWidget(grp_view)
+        # Wire filters
+        self.chkViewAll.toggled.connect(self._on_view_all)
+        self.chkViewX.toggled.connect(lambda _v: self._update_overlays())
+        self.chkViewY.toggled.connect(lambda _v: self._update_overlays())
+        self.chkViewZ.toggled.connect(lambda _v: self._update_overlays())
         # Direction group -------------------------------------------------
-        grp_dir = QtWidgets.QGroupBox("Direction")
+        grp_dir = QtWidgets.QGroupBox("Slicing Direction")
+        grp_dir.setMaximumWidth(276)
         gdl = QtWidgets.QGridLayout(grp_dir)
         self.cboAxis = QtWidgets.QComboBox(); self.cboAxis.addItems(["X", "Y", "Z", "Custom"]) 
         self.cboAxis.currentIndexChanged.connect(self._on_dir_changed)
@@ -389,13 +446,21 @@ class SlicingPanel(QtWidgets.QWidget):
         lay.addWidget(grp_dir)
 
         # Thickness & Mode ------------------------------------------------
-        grp_mode = QtWidgets.QGroupBox("Thickness & Mode")
+        grp_mode = QtWidgets.QGroupBox("Slicing Mode")
+        grp_mode.setMaximumWidth(276)
         fl = QtWidgets.QFormLayout(grp_mode)
         self.spnThickness = QtWidgets.QDoubleSpinBox(); self.spnThickness.setRange(0.0, 1e6); self.spnThickness.setDecimals(5); self.spnThickness.setSingleStep(0.01); self.spnThickness.setValue(0.0)
         fl.addRow("Thickness:", self.spnThickness)
-        self.rdoDelta = QtWidgets.QRadioButton("Fixed Δ (step)"); self.rdoCount = QtWidgets.QRadioButton("Fixed number of slices"); self.rdoCustom = QtWidgets.QRadioButton("Custom rule"); self.rdoDelta.setChecked(True)
-        rowModes = QtWidgets.QHBoxLayout(); [rowModes.addWidget(w) for w in (self.rdoDelta, self.rdoCount, self.rdoCustom)]
-        fl.addRow("Mode:", self._wrap(rowModes))
+        self.spnThickness.valueChanged.connect(self._on_thickness_changed)
+        # Mode: use a combo for clarity and simpler state management
+        self.cboMode = QtWidgets.QComboBox()
+        self.cboMode.addItems(["Fixed number", "Fixed step", "Custom rule"])  # 0,1,2
+        self.cboMode.currentIndexChanged.connect(self._on_mode_changed)
+        fl.addRow("Mode:", self.cboMode)
+
+        # Keep params (already defined below), just ensure they are present
+        # self.spnDelta, self.spnCount, self.edCustomRule are already created as in your file
+        # Initialize enable state once UI is built (do a first call at end of _build_ui)
         self.spnDelta = QtWidgets.QDoubleSpinBox(); self.spnDelta.setRange(0.0, 1e6); self.spnDelta.setDecimals(5); self.spnDelta.setSingleStep(0.01); self.spnDelta.setValue(0.10)
         self.spnCount = QtWidgets.QSpinBox(); self.spnCount.setRange(1, 100000); self.spnCount.setValue(20)
         self.edCustomRule = QtWidgets.QLineEdit(); self.edCustomRule.setPlaceholderText("e.g. z<10 then Δ=0.05 else Δ=0.10")
@@ -405,7 +470,8 @@ class SlicingPanel(QtWidgets.QWidget):
         lay.addWidget(grp_mode)
 
         # Range -----------------------------------------------------------
-        grp_rng = QtWidgets.QGroupBox("Range")
+        grp_rng = QtWidgets.QGroupBox("Slicing Range")
+        grp_rng.setMaximumWidth(276)
         fr = QtWidgets.QFormLayout(grp_rng)
         self.spnStart = QtWidgets.QDoubleSpinBox(); self.spnStart.setRange(-1e9, 1e9); self.spnStart.setDecimals(6)
         self.spnEnd = QtWidgets.QDoubleSpinBox(); self.spnEnd.setRange(-1e9, 1e9); self.spnEnd.setDecimals(6)
@@ -414,8 +480,9 @@ class SlicingPanel(QtWidgets.QWidget):
         lay.addWidget(grp_rng)
 
         # Products --------------------------------------------------------
-        grp_prod = QtWidgets.QGroupBox("Products")
-        hl = QtWidgets.QHBoxLayout(grp_prod)
+        grp_prod = QtWidgets.QGroupBox("Slicing Products")
+        grp_prod.setMaximumWidth(276)
+        hl = QtWidgets.QVBoxLayout(grp_prod)
         self.chkCentroids = QtWidgets.QCheckBox("Centroids")
         self.chkRawPolylines = QtWidgets.QCheckBox("Raw polylines")
         self.chkRefinedPolylines = QtWidgets.QCheckBox("Refined polylines")
@@ -425,19 +492,57 @@ class SlicingPanel(QtWidgets.QWidget):
         lay.addWidget(grp_prod)
 
         # Actions ---------------------------------------------------------
-        rowAct = QtWidgets.QHBoxLayout()
-        self.btnCompute = QtWidgets.QPushButton("Compute Slices")
-        self.btnGrid = QtWidgets.QPushButton("Generate Grid from Slices")
-        self.btnFEM = QtWidgets.QPushButton("Build FEM from Grid")
+        rowAct = QtWidgets.QVBoxLayout()
+        self.btnCompute = QtWidgets.QPushButton("Generate Slices")
+        self.btnGrid = QtWidgets.QPushButton("Generate Grid")
+        self.btnFEM = QtWidgets.QPushButton("Build FEM")
         [rowAct.addWidget(b) for b in (self.btnCompute, self.btnGrid, self.btnFEM)]
         lay.addWidget(self._wrap(rowAct))
         lay.addStretch(1)
+        
+        # Initialize mode-dependent widgets
+        self._on_mode_changed(self.cboMode.currentIndex())
 
         # Wire
         self.btnCompute.clicked.connect(self._on_compute_slices)
         self.btnGrid.clicked.connect(self._on_grid_from_slices)
         self.btnFEM.clicked.connect(self._on_fem_from_grid)
 
+
+    def _on_view_all(self, v: bool) -> None:
+        try:
+            self.chkViewX.blockSignals(True); self.chkViewY.blockSignals(True); self.chkViewZ.blockSignals(True)
+            self.chkViewX.setChecked(v); self.chkViewY.setChecked(v); self.chkViewZ.setChecked(v)
+        finally:
+            self.chkViewX.blockSignals(False); self.chkViewY.blockSignals(False); self.chkViewZ.blockSignals(False)
+        self._update_overlays()
+
+    def _axis_color(self, ax: str) -> tuple[float, float, float]:
+        ax = (ax or "Z").upper()
+        if ax == "X": return self._style.get("color_x", (1.0, 0.25, 0.25))
+        if ax == "Y": return self._style.get("color_y", (0.25, 1.0, 0.25))
+        return self._style.get("color_z", (0.25, 0.5, 1.0))
+
+    def _axis_visible(self, ax: str) -> bool:
+        ax = (ax or "Z").upper()
+        if getattr(self, "chkViewAll", None) and self.chkViewAll.isChecked():
+            return True
+        if ax == "X": return getattr(self, "chkViewX", None) and self.chkViewX.isChecked()
+        if ax == "Y": return getattr(self, "chkViewY", None) and self.chkViewY.isChecked()
+        return getattr(self, "chkViewZ", None) and self.chkViewZ.isChecked()
+
+    def _on_mode_changed(self, idx: int) -> None:
+        """Enable/disable fields according to mode combo.
+
+        0 = Fixed number, 1 = Fixed step, 2 = Custom rule
+        """
+        is_count = (idx == 0)
+        is_step = (idx == 1)
+        is_custom = (idx == 2)
+        self.spnCount.setEnabled(is_count)
+        self.spnDelta.setEnabled(is_step)
+        self.edCustomRule.setEnabled(is_custom)
+        
     def _init_defaults(self) -> None:
         """Initialize default range from active dataset bounds (best effort)."""
         try:
@@ -451,12 +556,17 @@ class SlicingPanel(QtWidgets.QWidget):
                     self.cboAxis.setCurrentIndex(idx)
                     # Thickness
                     if "thickness" in slices:
-                        self.spnThickness.setValue(float(slices["thickness"]))
-                    # Mode mapping
+                        self._setting_thickness = True
+                        try:
+                            self.spnThickness.setValue(float(slices["thickness"]))
+                        finally:
+                            self._setting_thickness = False
+                        # programmatic suggestion: do not mark as user-set
+                        self._thickness_user_set = False
+                    # Mode mapping -> combo index
                     mode = str(slices.get("spacing_mode", "fixed_count")).lower()
-                    self.rdoDelta.setChecked(mode == "fixed_step")
-                    self.rdoCount.setChecked(mode == "fixed_count")
-                    self.rdoCustom.setChecked(mode == "custom")
+                    idxm = {"fixed_count": 0, "fixed_step": 1, "custom": 2}.get(mode, 0)
+                    self.cboMode.setCurrentIndex(idxm)
                     # Mode params
                     if "fixed_step" in slices:
                         self.spnDelta.setValue(float(slices["fixed_step"]))
@@ -478,10 +588,16 @@ class SlicingPanel(QtWidgets.QWidget):
                                 ax = str(defaults["axis"]).upper();
                                 i = max(0, ["X","Y","Z","CUSTOM"].index(ax) if ax in ("X","Y","Z","CUSTOM") else 0)
                                 self.cboAxis.setCurrentIndex(i)
-                            if "thickness" in defaults: self.spnThickness.setValue(float(defaults["thickness"]))
+                            if "thickness" in defaults:
+                                self._setting_thickness = True
+                                try:
+                                    self.spnThickness.setValue(float(defaults["thickness"]))
+                                finally:
+                                    self._setting_thickness = False
+                                self._thickness_user_set = False
                             if "mode" in defaults:
                                 m = str(defaults["mode"]).lower()
-                                self.rdoDelta.setChecked(m == "delta"); self.rdoCount.setChecked(m == "count"); self.rdoCustom.setChecked(m == "custom")
+                                self.cboMode.setCurrentIndex({"count":0, "delta":1, "fixed":1, "custom":2}.get(m, 0))
                             if "delta" in defaults: self.spnDelta.setValue(float(defaults["delta"]))
                             if "count" in defaults: self.spnCount.setValue(int(defaults["count"]))
                             if "custom_rule" in defaults: self.edCustomRule.setText(str(defaults["custom_rule"]))
@@ -497,6 +613,12 @@ class SlicingPanel(QtWidgets.QWidget):
         except Exception:
             pass
         self._on_dir_changed(self.cboAxis.currentIndex())
+        try:
+            L = abs(float(self.spnEnd.value()) - float(self.spnStart.value()))
+            n = max(1, int(self.spnCount.value()))
+            self.spnDelta.setValue(L if n <= 1 else (L / float(n - 1)))
+        except Exception:
+            pass
 
     @staticmethod
     def _wrap(layout: QtWidgets.QLayout) -> QtWidgets.QWidget:
@@ -508,6 +630,71 @@ class SlicingPanel(QtWidgets.QWidget):
         for w in (self.edP1X, self.edP1Y, self.edP1Z, self.edP2X, self.edP2Y, self.edP2Z, self.btnPickP1, self.btnPickP2):
             w.setEnabled(is_custom)
 
+        # On direction change, allow auto-suggestion again unless user edits afterwards
+        self._thickness_user_set = False
+
+        # Auto-update range from active dataset bounds for the chosen axis
+        ds = self._current_dataset_index()
+        b = self._active_dataset_bounds(ds)
+        if isinstance(b, (list, tuple)) and len(b) == 2:
+            try:
+                self.spnStart.blockSignals(True); self.spnEnd.blockSignals(True)
+                self.spnStart.setValue(float(min(b))); self.spnEnd.setValue(float(max(b)))
+            finally:
+                self.spnStart.blockSignals(False); self.spnEnd.blockSignals(False)
+            # Recompute fixed step from range / current count
+            try:
+                L = abs(float(self.spnEnd.value()) - float(self.spnStart.value()))
+                n = max(1, int(self.spnCount.value()))
+                self.spnDelta.setValue(L if n <= 1 else (L / float(n - 1)))
+            except Exception:
+                pass
+
+        # Enforce thickness suggestion: at least 3× mean spacing (unless user-set)
+        try:
+            thr = max(self._suggest_thickness(ds), 0.0)
+            if thr > 0.0 and not self._thickness_user_set:
+                self._setting_thickness = True
+                try:
+                    self.spnThickness.setValue(thr)
+                finally:
+                    self._setting_thickness = False
+                self._thickness_user_set = False
+        except Exception:
+            pass
+    
+    def _suggest_thickness(self, ds: Optional[int]) -> float:
+        """Return a suggested thickness (>= 3× mean point spacing).
+
+        Tries Cloud Inspection metrics if available, falls back to a quick
+        spacing estimate from bounds and point count.
+        """
+        mnn = self._mean_nn_distance(ds)
+        if mnn and mnn > 0:
+            return 3.0 * float(mnn)
+        sp = self._estimate_point_spacing(ds)
+        return 3.0 * float(sp) if sp > 0 else 0.0
+
+    def _mean_nn_distance(self, ds: Optional[int]) -> float:
+        """Fetch mean nearest-neighbor distance from Cloud Inspection results, if present."""
+        try:
+            v = getattr(self.window, "viewer3d", None)
+            recs = getattr(v, "_datasets", []) if v is not None else []
+            if not (isinstance(ds, int) and 0 <= ds < len(recs)):
+                return 0.0
+            glob = recs[ds].get("inspection_global", {}) or {}
+            # Try common keys (supporting your Cloud Inspection plugin)
+            for k in ("mean_nn_distance", "nn_mean", "mean_nn", "avg_nn_dist", "mean_neighbor_distance"):
+                val = glob.get(k)
+                if val is not None:
+                    try:
+                        return float(val)
+                    except Exception:
+                        pass
+        except Exception:
+            return 0.0
+        return 0.0
+
     # --------------------------- Actions --------------------------------
     def _on_compute_slices(self) -> None:
         """Compute slices and derived products, honoring CANCEL.
@@ -516,6 +703,7 @@ class SlicingPanel(QtWidgets.QWidget):
         Heavy-lifting ops are left as TODO markers to be replaced with Cloud2FEMi calls.
         """
         p = self._params()
+        self._log("INFO", f"[c2f] compute: axis={p['axis']} start={p['start']:.4g} end={p['end']:.4g} thick={p['thickness']:.4g} mode={p['mode']}")
         self._progress_begin("Computing slices…")
         win = self.window
         canceled = {"flag": False}
@@ -528,7 +716,8 @@ class SlicingPanel(QtWidgets.QWidget):
             btn = getattr(win, "btnCancel", None)
             if isinstance(btn, QtWidgets.QPushButton):
                 btn.setEnabled(True)
-                btn.clicked.connect(_cancel, QtCore.Qt.ConnectionType.UniqueConnection)
+                # Avoid UniqueConnection here because _cancel is a local function (non QObject slot)
+                btn.clicked.connect(_cancel)
         except Exception:
             pass
 
@@ -570,10 +759,29 @@ class SlicingPanel(QtWidgets.QWidget):
 
             # Thickness default suggestion: 3× average spacing
             thick = float(p["thickness"])
+            min_thick = self._suggest_thickness(ds)
             if thick <= 0.0:
-                spacing = self._estimate_point_spacing(ds)
-                thick = 3.0 * spacing if spacing > 0 else max(1e-3, L / 200.0)
-                self.spnThickness.setValue(thick)
+                # Last resort: no user value, choose something reasonable
+                thick = max(1e-3, min_thick if (min_thick and min_thick > 0.0) else (L / 200.0))
+                self._setting_thickness = True
+                try:
+                    self.spnThickness.setValue(thick)
+                finally:
+                    self._setting_thickness = False
+                # do not mark user-set here
+                self._thickness_user_set = False
+            elif (min_thick and min_thick > 0.0) and (thick < min_thick) and (not self._thickness_user_set):
+                # Only auto-bump to suggested minimum if the user did not explicitly override
+                thick = float(min_thick)
+                self._setting_thickness = True
+                try:
+                    self.spnThickness.setValue(thick)
+                finally:
+                    self._setting_thickness = False
+                self._thickness_user_set = False
+            # else: respect user's explicit value even if below suggestion; optionally warn
+            elif (min_thick and min_thick > 0.0) and (thick < min_thick) and self._thickness_user_set:
+                self._log("INFO", f"Using user thickness {thick:.4g} below suggested min {min_thick:.4g}")
 
             # Produce slices (placeholders)
             out = []
@@ -594,16 +802,29 @@ class SlicingPanel(QtWidgets.QWidget):
                 self._progress_update(int(5 + 90 * (i + 1) / total), f"Slice {i+1}/{total}")
 
             self._slices = out
+            # Sync to store as soon as we have the slices
+            self._sync_mct_store()
             self._progress_end()
             self._log("INFO", f"Slices ready: {len(out)}")
             self._ensure_tree()
+            self._sync_mct_store()
+            # Refresh overlays to show new slices immediately if toggles are ON
+            try:
+                for k in ("planes", "slices", "centroids", "polylines", "polygons", "current"):
+                    if self._vis.get(k, False):
+                        self._update_overlays(k)
+            except Exception:
+                pass
         finally:
             # Unhook CANCEL
             try:
                 btn = getattr(win, "btnCancel", None)
                 if isinstance(btn, QtWidgets.QPushButton):
                     btn.setEnabled(False)
-                    btn.clicked.disconnect(_cancel)
+                    try:
+                        btn.clicked.disconnect(_cancel)
+                    except Exception:
+                        pass
             except Exception:
                 pass
 
@@ -636,9 +857,8 @@ class SlicingPanel(QtWidgets.QWidget):
             except Exception: return None
         p1 = (_f(self.edP1X), _f(self.edP1Y), _f(self.edP1Z))
         p2 = (_f(self.edP2X), _f(self.edP2Y), _f(self.edP2Z))
-        if self.rdoDelta.isChecked(): mode = "delta"
-        elif self.rdoCount.isChecked(): mode = "count"
-        else: mode = "custom"
+        mode_map = {0: "count", 1: "delta", 2: "custom"}
+        mode = mode_map.get(self.cboMode.currentIndex(), "count")
         return {
             "axis": axis, "p1": p1, "p2": p2,
             "thickness": float(self.spnThickness.value()),
@@ -649,37 +869,407 @@ class SlicingPanel(QtWidgets.QWidget):
         }
 
     def set_visibility(self, kind: str, visible: bool) -> None:
-        """Toggle visibility of a product overlay in the viewer.
+        """Toggle visibility of a product overlay in the viewer."""
+        self._vis[kind] = bool(visible)
+        self._log("INFO", f"Visibility → {kind}={'ON' if visible else 'OFF'}")
+        # Drive overlays
+        try:
+            self._update_overlays(kind)
+        except Exception as ex:
+            self._log("WARN", f"Overlay update failed for {kind}: {ex}")
+    
+    # ------------------------- Overlay helpers -------------------------
+    def _plotter(self):
+        """Return PyVista plotter from host viewer if available."""
+        v = getattr(self.window, "viewer3d", None)
+        return getattr(v, "plotter", None)
+
+    def _clear_actors(self, kind: str) -> None:
+        plt = self._plotter()
+        if plt is None:
+            self._actors[kind] = []
+            return
+        try:
+            for a in self._actors.get(kind, []) or []:
+                try:
+                    # PyVista supports remove_actor(actor) or remove_actor(name); try both
+                    try:
+                        plt.remove_actor(a)
+                    except Exception:
+                        if isinstance(a, str):
+                            plt.remove_actor(a)
+                except Exception:
+                    pass
+        finally:
+            self._actors[kind] = []
+
+    def _update_overlays(self, kind: Optional[str] = None) -> None:
+        """Update one or all overlay kinds based on current visibility and data."""
+        kinds = [kind] if kind else list(self._vis.keys())
+        for k in kinds:
+            if not self._vis.get(k, False):
+                self._clear_actors(k)
+                continue
+            if k == "planes":
+                self._render_planes()
+            elif k == "slices":
+                self._render_slice_points()
+            elif k == "current":
+                self._render_current_slice()
+            elif k == "centroids":
+                self._render_centroids()
+            elif k == "polylines":
+                self._render_polylines()
+            elif k == "polygons":
+                self._render_polygons()
+
+    def _dataset_extents(self, ds: Optional[int]):
+        """Return (center_xyz, size_xyz) from active dataset bounds (safe)."""
+        v = getattr(self.window, "viewer3d", None)
+        recs = getattr(v, "_datasets", []) if v is not None else []
+        if not (isinstance(ds, int) and 0 <= ds < len(recs)):
+            return None, None
+        pdata = recs[ds].get("pdata")
+        if pdata is None or not hasattr(pdata, "bounds"):
+            return None, None
+        b = pdata.bounds
+        cx = 0.5 * (b[0] + b[1]); cy = 0.5 * (b[2] + b[3]); cz = 0.5 * (b[4] + b[5])
+        sx = abs(b[1] - b[0]); sy = abs(b[3] - b[2]); sz = abs(b[5] - b[4])
+        return (cx, cy, cz), (sx, sy, sz)
+
+    def _render_planes(self) -> None:
+        plt = self._plotter()
+        if plt is None:
+            return
+        self._clear_actors("planes")
+        if not self._slices:
+            return
+        try:
+            import pyvista as pv
+        except Exception:
+            return
+        ds = self._current_dataset_index()
+        center, size = self._dataset_extents(ds)
+        if center is None or size is None:
+            return
+        sx, sy, sz = size
+        # Slightly larger than bbox for visibility
+        i_size_xy = max(1e-9, 1.05 * sx)
+        j_size_xy = max(1e-9, 1.05 * sy)
+        i_size_xz = max(1e-9, 1.05 * sx)
+        j_size_xz = max(1e-9, 1.05 * sz)
+        i_size_yz = max(1e-9, 1.05 * sy)
+        j_size_yz = max(1e-9, 1.05 * sz)
+
+        # Default axis from combo; each slice may override with its own axis
+        default_axis = (self.cboAxis.currentText() or "Z").upper()
+        actors = []
+        for i, s in enumerate(self._slices):
+            c = float(s.get("coord", 0.0))
+            ax_s = (s.get("axis") or default_axis).upper()
+            if not self._axis_visible(ax_s):
+                continue
+            color = self._axis_color(ax_s)
+            opacity = float(self._style.get("planes_opacity", 0.18))
+            if ax_s == "X":
+                plane = pv.Plane(center=(c, center[1], center[2]), direction=(1, 0, 0),
+                                 i_size=j_size_yz, j_size=i_size_yz)
+            elif ax_s == "Y":
+                plane = pv.Plane(center=(center[0], c, center[2]), direction=(0, 1, 0),
+                                 i_size=i_size_xz, j_size=j_size_xz)
+            else:  # Z
+                plane = pv.Plane(center=(center[0], center[1], c), direction=(0, 0, 1),
+                                 i_size=i_size_xy, j_size=j_size_xy)
+            try:
+                a = plt.add_mesh(plane, name=f"c2f_plane_{i}", color=color, opacity=opacity, pickable=False)
+            except TypeError:
+                a = plt.add_mesh(plane, color=color, opacity=opacity, pickable=False)
+            actors.append(a if a is not None else f"c2f_plane_{i}")
+        self._actors["planes"] = actors
+        try:
+            plt.render()
+        except Exception:
+            pass
+
+    def _slice_indices_and_points(self, rec, pdata):
+        """Return (indices, Nx3 points) inside the slice window for *rec*.
 
         Args:
-            kind: One of {"slices", "current", "centroids", "polylines", "polygons", "mesh"}.
-            visible: True to show, False to hide.
-        """
-        self._vis[kind] = bool(visible)
-        # TODO: wire to actual overlay updates; for now, just log
-        self._log("INFO", f"Visibility → {kind}={'ON' if visible else 'OFF'}")
-        
-    def _ensure_tree(self) -> None:
-        """Ensure the dataset node contains the Cloud2FEM sections.
-
-        Structure:
-            <dataset>
-              - Point cloud
-                  - Normals
-              - Slices
-                  - Slices
-                  - Centroids
-                  - Polylines
-                  - Polygons
-                  - Materials
-              - FEM
-                  - C2F mesh
+            rec: dict with keys {axis, coord, thickness}
+            pdata: active pyvista.PolyData
+        Returns:
+            (idx, pts) or (None, None) on failure/empty.
         """
         try:
-            tree = getattr(self.window, "treeDatasets", None) or getattr(self.window, "tree", None)
+            import numpy as np
+        except Exception:
+            return None, None
+        if pdata is None or not hasattr(pdata, "points"):
+            return None, None
+        pts = pdata.points
+        if pts is None:
+            return None, None
+        axis = (rec.get("axis") or self.cboAxis.currentText() or "Z").upper()
+        coord = float(rec.get("coord", 0.0))
+        thick = float(rec.get("thickness", 0.0))
+        dim = {"X": 0, "Y": 1, "Z": 2}.get(axis, 2)
+        lo = coord - 0.5 * thick
+        hi = coord + 0.5 * thick
+        try:
+            mask = (pts[:, dim] >= lo) & (pts[:, dim] <= hi)
+            idx = np.nonzero(mask)[0]
+            if idx.size == 0:
+                return None, None
+            return idx, pts[idx]
+        except Exception:
+            return None, None
+
+    def _render_slice_points(self) -> None:
+        plt = self._plotter()
+        if plt is None:
+            return
+        self._clear_actors("slices")
+        if not self._slices:
+            return
+        try:
+            import pyvista as pv
+        except Exception:
+            return
+        ds = self._current_dataset_index()
+        v = getattr(self.window, "viewer3d", None)
+        recs = getattr(v, "_datasets", []) if v is not None else []
+        if not (isinstance(ds, int) and 0 <= ds < len(recs)):
+            return
+        pdata = recs[ds].get("pdata")
+        if pdata is None:
+            return
+        actors = []
+        for i, s in enumerate(self._slices):
+            ax_s = (s.get("axis") or self.cboAxis.currentText() or "Z").upper()
+            if not self._axis_visible(ax_s):
+                continue
+            idx, pts = self._slice_indices_and_points(s, pdata)
+            if pts is None:
+                continue
+            color = self._axis_color(ax_s)
+            try:
+                cloud = pv.PolyData(pts)
+                a = plt.add_points(cloud, color=color,
+                                   point_size=max(1.0, float(self._style.get("point_size_factor", 2.0)) * 2.0),
+                                   render_points_as_spheres=False)
+            except TypeError:
+                a = plt.add_points(pts, color=color,
+                                   point_size=max(1.0, float(self._style.get("point_size_factor", 2.0)) * 2.0),
+                                   render_points_as_spheres=False)
+            actors.append(a if a is not None else f"c2f_slice_pts_{i}")
+        self._actors["slices"] = actors
+        try:
+            plt.render()
+        except Exception:
+            pass
+
+    def _render_centroids(self) -> None:
+        plt = self._plotter()
+        if plt is None:
+            return
+        self._clear_actors("centroids")
+        if not self._slices:
+            return
+        try:
+            import pyvista as pv
+            import numpy as np
+        except Exception:
+            return
+        ds = self._current_dataset_index()
+        v = getattr(self.window, "viewer3d", None)
+        recs = getattr(v, "_datasets", []) if v is not None else []
+        if not (isinstance(ds, int) and 0 <= ds < len(recs)):
+            return
+        pdata = recs[ds].get("pdata")
+        if pdata is None:
+            return
+        actors = []
+        for i, s in enumerate(self._slices):
+            ax_s = (s.get("axis") or self.cboAxis.currentText() or "Z").upper()
+            if not self._axis_visible(ax_s):
+                continue
+            idx, pts = self._slice_indices_and_points(s, pdata)
+            if pts is None:
+                continue
+            try:
+                c = pts.mean(axis=0)
+            except Exception:
+                continue
+            color = self._axis_color(ax_s)
+            try:
+                a = plt.add_points(pv.PolyData(c.reshape(1, 3)), color=color,
+                                   point_size=float(self._style.get("centroid_size", 12.0)),
+                                   render_points_as_spheres=True)
+            except TypeError:
+                a = plt.add_points(c.reshape(1, 3), color=color,
+                                   point_size=float(self._style.get("centroid_size", 12.0)),
+                                   render_points_as_spheres=True)
+            actors.append(a if a is not None else f"c2f_centroid_{i}")
+        self._actors["centroids"] = actors
+        try:
+            plt.render()
+        except Exception:
+            pass
+
+    def _render_current_slice(self) -> None:
+        plt = self._plotter()
+        if plt is None:
+            return
+        self._clear_actors("current")
+        if not self._slices:
+            return
+        try:
+            import pyvista as pv
+        except Exception:
+            return
+        ds = self._current_dataset_index()
+        center, size = self._dataset_extents(ds)
+        if center is None or size is None:
+            return
+        sx, sy, sz = size
+        # Pick the middle slice by index
+        idx = len(self._slices) // 2
+        c = float(self._slices[idx].get("coord", 0.0))
+        ax_s = (self._slices[idx].get("axis") or (self.cboAxis.currentText() or "Z")).upper()
+        if not self._axis_visible(ax_s):
+            return
+        color = self._axis_color(ax_s)
+        opacity = float(self._style.get("current_plane_opacity", 0.35))
+        if ax_s == "X":
+            plane = pv.Plane(center=(c, center[1], center[2]), direction=(1, 0, 0),
+                             i_size=1.08 * max(1e-9, sy), j_size=1.08 * max(1e-9, sz))
+        elif ax_s == "Y":
+            plane = pv.Plane(center=(center[0], c, center[2]), direction=(0, 1, 0),
+                             i_size=1.08 * max(1e-9, sx), j_size=1.08 * max(1e-9, sz))
+        else:
+            plane = pv.Plane(center=(center[0], center[1], c), direction=(0, 0, 1),
+                             i_size=1.08 * max(1e-9, sx), j_size=1.08 * max(1e-9, sy))
+        try:
+            a = plt.add_mesh(plane, name="c2f_slice_current", color=color, opacity=opacity, pickable=False)
+        except TypeError:
+            a = plt.add_mesh(plane, color=color, opacity=opacity, pickable=False)
+        self._actors["current"] = [a if a is not None else "c2f_slice_current"]
+        try:
+            plt.render()
+        except Exception:
+            pass
+    
+    def _render_polylines(self) -> None:
+        plt = self._plotter()
+        if plt is None: return
+        self._clear_actors("polylines")
+        if not self._slices: return
+        try:
+            import pyvista as pv, numpy as np
+        except Exception:
+            return
+        actors = []
+        for i, s in enumerate(self._slices):
+            ax_s = (s.get("axis") or self.cboAxis.currentText() or "Z").upper()
+            if not self._axis_visible(ax_s):
+                continue
+            color = self._axis_color(ax_s)
+            width = float(self._style.get("line_width", 2.0))
+            polys = s.get("polyline_refined") or s.get("polyline_raw")
+            if not polys:
+                continue
+            seq = polys if isinstance(polys, (list, tuple)) else [polys]
+            for j, arr in enumerate(seq):
+                try:
+                    pts = np.asarray(arr, dtype=float).reshape(-1, 3)
+                    if pts.shape[0] < 2: continue
+                except Exception:
+                    continue
+                # PolyData line
+                n = pts.shape[0]
+                cells = np.hstack([[n], np.arange(n, dtype=np.int32)])
+                pd = pv.PolyData(pts); pd.lines = cells
+                try:
+                    a = plt.add_mesh(pd, color=color, line_width=width, render_lines_as_tubes=True)
+                except TypeError:
+                    a = plt.add_mesh(pd, color=color)
+                actors.append(a if a is not None else f"c2f_polyline_{i}_{j}")
+                # Vertex glyphs (small cones as “spigoli” markers)
+                try:
+                    centers = pv.PolyData(pts)
+                    glyph = pv.Cone(direction=(0,0,1), height=0.02, radius=0.008, resolution=8)
+                    g = centers.glyph(geom=glyph, scale=False)
+                    ga = plt.add_mesh(g, color=color, opacity=0.9)
+                    actors.append(ga if ga is not None else f"c2f_poly_glyph_{i}_{j}")
+                except Exception:
+                    pass
+        self._actors["polylines"] = actors
+        try: plt.render()
+        except Exception: pass
+    
+    def _render_polygons(self) -> None:
+        plt = self._plotter()
+        if plt is None: return
+        self._clear_actors("polygons")
+        if not self._slices: return
+        try:
+            import pyvista as pv, numpy as np
+        except Exception:
+            return
+        actors = []
+        for i, s in enumerate(self._slices):
+            ax_s = (s.get("axis") or self.cboAxis.currentText() or "Z").upper()
+            if not self._axis_visible(ax_s):
+                continue
+            color = self._axis_color(ax_s)
+            edge_w = float(self._style.get("poly_edge_width", 1.5))
+            opacity = float(self._style.get("poly_opacity", 0.25))
+            polys = s.get("polygons")
+            if not polys:
+                continue
+            seq = polys if isinstance(polys, (list, tuple)) else [polys]
+            for j, poly in enumerate(seq):
+                try:
+                    pts = np.asarray(poly, dtype=float).reshape(-1, 3)
+                    if pts.shape[0] < 3: continue
+                    n = pts.shape[0]
+                    faces = np.hstack([[n], np.arange(n, dtype=np.int32)])
+                    surf = pv.PolyData(pts); surf.faces = faces
+                except Exception:
+                    continue
+                try:
+                    a = plt.add_mesh(surf, color=color, opacity=opacity,
+                                    show_edges=True, edge_color=color, line_width=edge_w)
+                except TypeError:
+                    a = plt.add_mesh(surf, color=color, opacity=opacity)
+                actors.append(a if a is not None else f"c2f_polygon_{i}_{j}")
+        self._actors["polygons"] = actors
+        try: plt.render()
+        except Exception: pass
+    # ----------------------- Host integration --------------------------    
+    def _ensure_tree(self) -> None:
+        """Ensure the dataset node contains the *Cloud2FEM* sections.
+
+        Structure:
+            <dataset(top-level)>
+              - Cloud2FEM
+                  - slices
+                  - centroids
+                  - polylines
+                  - polygons
+        Notes:
+            - We no longer create a duplicate "Point Cloud/Normals" branch.
+            - Items are selectable but not checkable to avoid host visibility side-effects.
+            - Each child stores a UserRole dict {plugin:"cloud2fem", kind:"..."} for host-side routing.
+        """
+        try:
+            # Prefer treeDatasets, else generic 'tree' (AVOID treeMCTS to prevent recursion)
+            tree = (getattr(self.window, "treeDatasets", None) or
+                    getattr(self.window, "tree", None))
             if tree is None or not hasattr(tree, "invisibleRootItem"):
                 return
-            # Heuristic: find current dataset item by selection or by index name
+
+            # Find active dataset name from viewer
             cur_name = None
             try:
                 idx = self._current_dataset_index()
@@ -691,44 +1281,62 @@ class SlicingPanel(QtWidgets.QWidget):
                 pass
 
             root = tree.invisibleRootItem()
-            # Try to find node by text; else use selected item
             ds_item = None
-            if cur_name:
-                for i in range(root.childCount()):
-                    it = root.child(i)
-                    if cur_name and it.text(0) == cur_name:
-                        ds_item = it
-                        break
+            # 1) exact match among top-level items
+            for i in range(root.childCount()):
+                it = root.child(i)
+                if cur_name and it.text(0) == cur_name:
+                    ds_item = it
+                    break
+            # 2) if no match, fall back to the top-level ancestor of the current item (if any)
             if ds_item is None:
-                ds_item = tree.currentItem() or root
+                cur = tree.currentItem()
+                if cur is not None:
+                    # climb to top-level
+                    while cur.parent() is not None:
+                        cur = cur.parent()
+                    ds_item = cur
+            # 3) as a last resort, do nothing
+            if ds_item is None:
+                return
 
-            def ensure_child(parent, label: str):
-                # Find by exact text in column 0; create if missing
+            def ensure_child(parent: QtWidgets.QTreeWidgetItem, label: str, kind: str) -> QtWidgets.QTreeWidgetItem:
+                # find existing
                 for i in range(parent.childCount()):
                     it = parent.child(i)
                     if it.text(0) == label:
+                        # ensure flags and role are set
+                        it.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)
+                        it.setData(0, QtCore.Qt.UserRole, {"plugin": "cloud2fem", "kind": kind})
                         return it
+                # create new
                 it = QtWidgets.QTreeWidgetItem([label])
+                it.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)
+                it.setData(0, QtCore.Qt.UserRole, {"plugin": "cloud2fem", "kind": kind})
                 parent.addChild(it)
                 return it
 
-            # Build structure
-            pc = ensure_child(ds_item, "Point cloud")
-            ensure_child(pc, "Normals")
+            # Build Cloud2FEM branch
+            # Avoid duplicate by searching for an existing child named "Cloud2FEM"
+            c2f = None
+            for i in range(ds_item.childCount()):
+                cand = ds_item.child(i)
+                if cand.text(0) == "Cloud2FEM":
+                    c2f = cand
+                    break
+            if c2f is None:
+                c2f = QtWidgets.QTreeWidgetItem(["Cloud2FEM"])
+                c2f.setFlags(QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)
+                c2f.setData(0, QtCore.Qt.UserRole, {"plugin": "cloud2fem", "kind": "group"})
+                ds_item.addChild(c2f)
 
-            sl = ensure_child(ds_item, "Slices")
-            ensure_child(sl, "Slices")
-            ensure_child(sl, "Centroids")
-            ensure_child(sl, "Polylines")
-            ensure_child(sl, "Polygons")
-            ensure_child(sl, "Materials")
-
-            fem = ensure_child(ds_item, "FEM")
-            ensure_child(fem, "C2F mesh")
+            ensure_child(c2f, "slices",     "slices")
+            ensure_child(c2f, "centroids",  "centroids")
+            ensure_child(c2f, "polylines",  "polylines")
+            ensure_child(c2f, "polygons",   "polygons")
 
             tree.expandItem(ds_item)
-            tree.expandItem(sl)
-            tree.expandItem(fem)
+            tree.expandItem(c2f)
         except Exception:
             pass
 
@@ -806,3 +1414,113 @@ class SlicingPanel(QtWidgets.QWidget):
         except Exception:
             pass
 
+    def _on_open_display_props(self) -> None:
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle("Cloud2FEM Display Properties")
+        form = QtWidgets.QFormLayout(dlg)
+        spnPoint = QtWidgets.QDoubleSpinBox(); spnPoint.setRange(0.1, 50.0); spnPoint.setValue(float(self._style.get("point_size_factor", 2.0)))
+        spnCent  = QtWidgets.QDoubleSpinBox(); spnCent.setRange(1.0, 64.0);  spnCent.setValue(float(self._style.get("centroid_size", 12.0)))
+        spnPOp   = QtWidgets.QDoubleSpinBox(); spnPOp.setRange(0.0, 1.0); spnPOp.setSingleStep(0.05); spnPOp.setValue(float(self._style.get("planes_opacity", 0.18)))
+        spnCOp   = QtWidgets.QDoubleSpinBox(); spnCOp.setRange(0.0, 1.0); spnCOp.setSingleStep(0.05); spnCOp.setValue(float(self._style.get("current_plane_opacity", 0.35)))
+        spnLW    = QtWidgets.QDoubleSpinBox(); spnLW.setRange(0.1, 20.0); spnLW.setValue(float(self._style.get("line_width", 2.0)))
+        spnPolyO = QtWidgets.QDoubleSpinBox(); spnPolyO.setRange(0.0, 1.0); spnPolyO.setSingleStep(0.05); spnPolyO.setValue(float(self._style.get("poly_opacity", 0.25)))
+        spnPEW   = QtWidgets.QDoubleSpinBox(); spnPEW.setRange(0.1, 20.0); spnPEW.setValue(float(self._style.get("poly_edge_width", 1.5)))
+        form.addRow("Point size ×:", spnPoint)
+        form.addRow("Centroid size:", spnCent)
+        form.addRow("Planes opacity:", spnPOp)
+        form.addRow("Current plane opacity:", spnCOp)
+        form.addRow("Polyline width:", spnLW)
+        form.addRow("Polygon opacity:", spnPolyO)
+        form.addRow("Polygon edge width:", spnPEW)
+        btns = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        form.addRow(btns)
+        def _apply():
+            self._style["point_size_factor"] = float(spnPoint.value())
+            self._style["centroid_size"] = float(spnCent.value())
+            self._style["planes_opacity"] = float(spnPOp.value())
+            self._style["current_plane_opacity"] = float(spnCOp.value())
+            self._style["line_width"] = float(spnLW.value())
+            self._style["poly_opacity"] = float(spnPolyO.value())
+            self._style["poly_edge_width"] = float(spnPEW.value())
+            self._update_overlays()
+            dlg.accept()
+        btns.accepted.connect(_apply)
+        btns.rejected.connect(dlg.reject)
+        dlg.exec()
+    
+    def _sync_mct_store(self) -> None:
+        """Mirror current slices/products into the active dataset record.
+
+        Only the axis involved in *this* compute pass is replaced; other axes are preserved.
+        Store schema (per-axis arrays): slices/centroids/polylines/polygons with keys X,Y,Z,C.
+        """
+        try:
+            if not self._slices:
+                self._log("INFO", "[c2f] _sync_mct_store: no slices in RAM; skip")
+                return
+            # Detect current axis from the first slice (fallback to combo)
+            cur_axis = (self._slices[0].get("axis") or (self.cboAxis.currentText() or "Z")).upper()
+            if cur_axis not in ("X","Y","Z"): cur_axis = "C"
+
+            v = getattr(self.window, "viewer3d", None)
+            if v is None:
+                self._log("WARN", "[c2f] _sync_mct_store: viewer3d not found")
+                return
+            recs = getattr(v, "_datasets", None)
+            if not isinstance(recs, list) or not recs:
+                self._log("WARN", "[c2f] _sync_mct_store: no datasets in viewer3d")
+                return
+            ds = self._current_dataset_index()
+            if not (isinstance(ds, int) and 0 <= ds < len(recs)):
+                self._log("WARN", f"[c2f] _sync_mct_store: invalid dataset index {ds}")
+                return
+            rec = recs[ds]
+            if not isinstance(rec, dict):
+                self._log("WARN", "[c2f] _sync_mct_store: dataset record is not a dict; cannot attach store")
+                return
+
+            store = rec.setdefault("cloud2fem", {})
+
+            def _axis_map():
+                return {"X": [], "Y": [], "Z": [], "C": []}
+
+            slices_map    = store.setdefault("slices",    _axis_map())
+            centroids_map = store.setdefault("centroids", _axis_map())
+            polylines_map = store.setdefault("polylines", _axis_map())
+            polygons_map  = store.setdefault("polygons",  _axis_map())
+
+            # Rebuild ONLY the current axis, preserve others
+            slices_map[cur_axis]    = []
+            centroids_map[cur_axis] = []
+            polylines_map[cur_axis] = []
+            polygons_map[cur_axis]  = []
+
+            for s in (self._slices or []):
+                ax = (s.get("axis") or cur_axis).upper()
+                if ax not in ("X","Y","Z"): ax = "C"
+                ax = cur_axis  # normalize all slices of this run under the current axis bucket
+                slices_map[ax].append({
+                    "coord": float(s.get("coord", 0.0)),
+                    "thickness": float(s.get("thickness", 0.0)),
+                })
+                C = s.get("centroids");     centroids_map[ax].append([] if C in (None, False) else C)
+                P = s.get("polyline_refined") or s.get("polyline_raw"); polylines_map[ax].append([] if P in (None, False) else P)
+                G = s.get("polygons");      polygons_map[ax].append([] if G in (None, False) else G)
+
+            self._log("INFO", f"[c2f] store sync: axis={cur_axis} slices={len(self._slices)} | totals: X={len(slices_map['X'])} Y={len(slices_map['Y'])} Z={len(slices_map['Z'])} C={len(slices_map['C'])}")
+        except Exception as ex:
+            self._log("WARN", f"[c2f] _sync_mct_store failed: {ex}")
+    def _on_thickness_changed(self, _v: float) -> None:
+        """Mark that the thickness was set by the user when the widget has focus.
+
+        We use a small guard to distinguish programmatic changes from manual edits.
+        """
+        if self._setting_thickness:
+            return
+        # Heuristic: consider it a user change if the spinbox currently has focus
+        try:
+            if self.spnThickness.hasFocus():
+                self._thickness_user_set = True
+        except Exception:
+            # Fallback: assume user intent
+            self._thickness_user_set = True

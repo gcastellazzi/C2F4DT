@@ -71,12 +71,13 @@ def _add_to_display_panel(window, title: str, widget: QtWidgets.QWidget) -> None
 
     # Fallback: wrap the widget in a QGroupBox and append it to the main vertical layout.
     box = QtWidgets.QGroupBox(title)
-    box.setMaximumWidth(300)
+    box.setMaximumWidth(320)
     lay = QtWidgets.QVBoxLayout(box)
-    lay.setContentsMargins(8, 8, 8, 8)
-    lay.addWidget(widget)
-    widget.setMaximumWidth(300)
+    lay.setContentsMargins(4, 4, 4, 4)
+    
+    widget.setMaximumWidth(320)
     widget.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
+    lay.addWidget(widget)
     box.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
     try:
         # displayPanel is already embedded in a QScrollArea; we use its main layout
